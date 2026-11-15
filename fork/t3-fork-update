@@ -1,0 +1,84 @@
+#!/bin/bash
+# Installs the latest andromidasj/t3code fork build over "T3 Code (Beta)" on this Mac.
+# Usage: t3-fork-update [-y] [--force]
+#   -y       don't ask before quitting T3 Code
+#   --force  reinstall even if the latest build is already installed
+set -euo pipefail
+
+REPO="andromidasj/t3code"
+APP_NAME="T3 Code (Beta)"
+APP="/Applications/$APP_NAME.app"
+STATE_DIR="$HOME/.local/state/t3-fork-update"
+# Fork builds all carry the upstream version (0.1.9 for fork-0.1.9-1, -2, ...), so the app's own
+# version can't tell them apart; remember the installed release tag instead.
+MARKER="$STATE_DIR/installed-tag"
+
+assume_yes=false
+force=false
+for arg in "$@"; do
+  case "$arg" in
+    -y | --yes) assume_yes=true ;;
+    --force) force=true ;;
+    -h | --help) sed -n '2,5p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "Unknown option: $arg" >&2; exit 2 ;;
+  esac
+done
+
+release_json=$(curl -fsSL -H "Accept: application/vnd.github+json" \
+  "https://api.github.com/repos/$REPO/releases/latest")
+field() {
+  osascript -l JavaScript -e 'function run(argv) {
+    const r = JSON.parse(argv[0]);
+    if (argv[1] === "tag") return r.tag_name;
+    const dmg = r.assets.find((a) => a.name.endsWith("-arm64.dmg"));
+    return dmg ? dmg.browser_download_url : "";
+  }' "$release_json" "$1"
+}
+tag=$(field tag)
+dmg_url=$(field dmg)
+[ -n "$dmg_url" ] || { echo "Release $tag has no arm64 DMG yet (still building?)." >&2; exit 1; }
+
+installed=$(cat "$MARKER" 2>/dev/null || true)
+if [ "$installed" = "$tag" ] && ! $force; then
+  echo "Already on $tag."
+  exit 0
+fi
+echo "Installed: ${installed:-unknown}  Latest: $tag"
+
+work=$(mktemp -d)
+mount="$work/mount"
+cleanup() {
+  hdiutil detach "$mount" -quiet 2>/dev/null || true
+  rm -rf "$work"
+}
+trap cleanup EXIT
+
+echo "Downloading $(basename "$dmg_url")..."
+curl -fL --progress-bar -o "$work/app.dmg" "$dmg_url"
+mkdir "$mount"
+hdiutil attach "$work/app.dmg" -nobrowse -readonly -quiet -mountpoint "$mount"
+[ -d "$mount/$APP_NAME.app" ] || { echo "The DMG has no $APP_NAME.app." >&2; exit 1; }
+
+running() { [ "$(osascript -e "application \"$APP_NAME\" is running")" = "true" ]; }
+if running; then
+  if ! $assume_yes; then
+    read -r -p "$APP_NAME will quit; agents running on this Mac stop. Continue? [y/N] " answer
+    [[ "$answer" =~ ^[Yy] ]] || { echo "Cancelled."; exit 1; }
+  fi
+  osascript -e "quit app \"$APP_NAME\""
+  for _ in $(seq 1 60); do running || break; sleep 0.5; done
+  running && { echo "$APP_NAME didn't quit; close it and run this again." >&2; exit 1; }
+fi
+
+# Copy beside the old app first so a failed copy leaves the old one in place.
+staged="/Applications/.$APP_NAME.updating.app"
+rm -rf "$staged"
+ditto "$mount/$APP_NAME.app" "$staged"
+xattr -dr com.apple.quarantine "$staged" 2>/dev/null || true
+rm -rf "$APP"
+mv "$staged" "$APP"
+
+mkdir -p "$STATE_DIR"
+echo "$tag" > "$MARKER"
+echo "Installed $tag. Opening $APP_NAME..."
+open "$APP"

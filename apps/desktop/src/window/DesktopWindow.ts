@@ -422,7 +422,6 @@ export const make = Effect.gen(function* () {
       minHeight: DesktopAppSettings.MIN_MAIN_WINDOW_SIZE.height,
       show: false,
       autoHideMenuBar: true,
-      ...(environment.platform === "darwin" ? { disableAutoHideCursor: true } : {}),
       backgroundColor: getInitialWindowBackgroundColor(shouldUseDarkColors),
       ...iconOption,
       title: environment.displayName,
@@ -447,9 +446,6 @@ export const make = Effect.gen(function* () {
 
     pendingMainReveals.set(window, Effect.void);
     yield* rendererHistory.register(window.webContents, { surface: "main" });
-    if (environment.platform === "darwin") {
-      window.setAutoHideCursor(false);
-    }
     let boundsPersistFiber: Fiber.Fiber<void, never> | undefined;
     let pendingBoundsPersistFiber: Fiber.Fiber<void, never> | undefined;
     let boundsPersistenceEnabled = persistedBounds === null || restoredPersistedBounds;

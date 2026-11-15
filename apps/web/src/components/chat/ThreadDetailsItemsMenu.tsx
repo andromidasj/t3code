@@ -17,8 +17,16 @@ import {
 export function ThreadDetailsItemsMenuItems() {
   const visibility = useClientSettings(resolveThreadDetailsVisibility);
   const m = useMessages();
+  const openByDefault = useClientSettings((settings) => settings.threadDetailsOpenByDefault);
   return (
     <>
+      <MenuCheckboxItem
+        checked={openByDefault}
+        onCheckedChange={(checked) => updateClientSettings({ threadDetailsOpenByDefault: checked })}
+      >
+        <T>Open in new threads</T>
+      </MenuCheckboxItem>
+      <MenuSeparator />
       <MenuGroup>
         <MenuGroupLabel>
           <T>Show in thread details</T>
@@ -39,7 +47,7 @@ export function ThreadDetailsItemsMenuItems() {
       </MenuGroup>
       <MenuSeparator />
       <MenuItem
-        disabled={isDefaultThreadDetailsVisibility(visibility)}
+        disabled={openByDefault && isDefaultThreadDetailsVisibility(visibility)}
         onClick={() => updateClientSettings(RESET_THREAD_DETAILS_ITEMS)}
       >
         <T>Reset to default</T>

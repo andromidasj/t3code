@@ -43,6 +43,7 @@ const popoverOpen = (threadRef: ScopedThreadRef) =>
     useRightPanelStore.getState().threadPanelVisibilityByThreadKey,
     threadRef,
     "popover",
+    true,
   );
 
 function Card({

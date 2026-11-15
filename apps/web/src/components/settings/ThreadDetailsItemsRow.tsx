@@ -18,15 +18,16 @@ export function ThreadDetailsItemsRow() {
   const gt = useGT();
   const searchableSetting = useSearchableSetting();
   const visibility = useClientSettings(resolveThreadDetailsVisibility);
+  const openByDefault = useClientSettings((settings) => settings.threadDetailsOpenByDefault);
   const enabled = THREAD_DETAILS_ITEMS.filter((item) => visibility[item.id]).length;
   return (
     <SettingsRow
       {...searchableSetting("thread-details-items")}
       description={gt(
-        "Choose what the thread details card shows. You can also right-click the card.",
+        "Choose what the thread details card shows and whether it opens in new threads. You can also right-click the card.",
       )}
       resetAction={
-        isDefaultThreadDetailsVisibility(visibility) ? null : (
+        openByDefault && isDefaultThreadDetailsVisibility(visibility) ? null : (
           <SettingResetButton
             ariaLabel={gt("Reset thread details to default")}
             onClick={() => updateClientSettings(RESET_THREAD_DETAILS_ITEMS)}

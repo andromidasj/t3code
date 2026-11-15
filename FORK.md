@@ -20,3 +20,4 @@ from it; servers stay on official releases.
 | Restore macOS cursor auto-hide while typing                             | reverts part of c2d44a312c | upstream hides the cursor while typing             |
 | Bindable `chat.citeSelection` command                                   | PR #34656                  | that PR or an equivalent merges                    |
 | "Open in new threads" setting for Thread details                        | PR #25598                  | that PR or an equivalent merges                    |
+| Cite button shows right after a double- or triple-click                 | PR #33221                  | that PR or an equivalent merges                    |

@@ -60,7 +60,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          notes="Patched build of T3 Code from $(git rev-parse --short HEAD). Patches: see FORK.md."
+          notes="Patched build of T3 Code from $(git rev-parse --short HEAD). Install or update on a Mac: run t3-fork-update (setup steps and patch list in FORK.md)."
           gh release create "$TAG" release/*.dmg --repo "$GITHUB_REPOSITORY" --title "$TAG" --notes "$notes"
 
       - name: Upload artifact

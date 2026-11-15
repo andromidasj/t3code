@@ -503,6 +503,34 @@ export function collectLimitPools(
   });
 }
 
+/**
+ * The pooled hub (CLIProxyAPI) accounts for one driver across every environment. A proxied
+ * instance cannot read its own subscription limits, so its thread shows these instead; the
+ * instance does not say which hub account a request used, so all of them are pooled.
+ */
+export function collectHubLimitPool(
+  driver: ServerProvider["driver"],
+  presentations: LimitPresentations,
+  now: number,
+): LimitPool | null {
+  const hubOnly: LimitPresentations = new Map(
+    [...presentations].map(([id, presentation]) => [
+      id,
+      {
+        entry: presentation.entry,
+        serverConfig: presentation.serverConfig && {
+          providers: [],
+          usageLimitSources: presentation.serverConfig.usageLimitSources,
+        },
+      },
+    ]),
+  );
+  const accounts = collectLimitAccounts(hubOnly).filter(
+    (account) => account.driver === driver && limitsNotice(account.limits) === null,
+  );
+  return collectLimitPools(accounts, now)[0] ?? null;
+}
+
 function accountSortName(account: LimitAccount): string {
   return (account.displayName ?? account.email ?? account.key).toLowerCase();
 }

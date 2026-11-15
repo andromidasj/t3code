@@ -18,6 +18,7 @@ import {
   collectLimitAccounts,
   collectExternalUsageLinks,
   collectLimitPools,
+  collectHubLimitPool,
   elapsedShare,
   exhaustedUsageWindow,
   paceOf,
@@ -590,6 +591,110 @@ describe("pools", () => {
         input: { sourceId: "hub", accountId: account.id, creditId: `${account.id}-credit` },
       })),
     );
+  });
+
+  it("pools a driver's hub accounts from every environment, leaving out native logins", () => {
+    const hubAccount = (id: string, usedPercent: number) => ({
+      id,
+      driver: claude,
+      email: `${id}@example.com`,
+      usageLimits: { checkedAt, windows: [{ ...window, usedPercent }] },
+    });
+    const input = new Map([
+      [
+        EnvironmentId.make("env-a"),
+        {
+          ...laptop,
+          serverConfig: {
+            providers: [
+              provider({
+                driver: claude,
+                instanceId: ProviderInstanceId.make("claude"),
+                auth: { status: "authenticated", email: "native@example.com" },
+                usageLimits: { checkedAt, windows: [{ ...window, usedPercent: 90 }] },
+              }),
+            ],
+            usageLimitSources: [
+              {
+                ...source,
+                accounts: [
+                  hubAccount("first", 20),
+                  hubAccount("second", 60),
+                  { ...hubAccount("codex", 5), driver: ProviderDriverKind.make("codex") },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+      [
+        EnvironmentId.make("env-b"),
+        {
+          entry: { target: { label: "Server" } },
+          serverConfig: {
+            providers: [
+              provider({
+                driver: claude,
+                instanceId: ProviderInstanceId.make("claude"),
+                usageLimits: {
+                  checkedAt,
+                  windows: [],
+                  unavailable: { reason: "unsupported" },
+                },
+              }),
+            ],
+          },
+        },
+      ],
+    ]);
+    const pool = collectHubLimitPool(claude, input, now);
+    expect(pool?.accounts.map((account) => account.email)).toEqual([
+      "first@example.com",
+      "second@example.com",
+    ]);
+    expect(pool?.windows[0]?.remainingPercent).toBe(60);
+    expect(collectHubLimitPool(ProviderDriverKind.make("cursor"), input, now)).toBeNull();
+  });
+
+  it("pools only the hub at the instance's endpoint when the server reports one", () => {
+    const hubAccount = (id: string, usedPercent: number) => ({
+      id,
+      driver: claude,
+      email: `${id}@example.com`,
+      usageLimits: { checkedAt, windows: [{ ...window, usedPercent }] },
+    });
+    const input = new Map([
+      [
+        EnvironmentId.make("env-a"),
+        {
+          ...laptop,
+          serverConfig: {
+            providers: [],
+            usageLimitSources: [
+              {
+                ...source,
+                id: UsageLimitSourceId.make("home"),
+                origin: "http://10.0.100.7:8317",
+                accounts: [hubAccount("home", 20)],
+              },
+              {
+                ...source,
+                id: UsageLimitSourceId.make("work"),
+                origin: "https://hub.example.com",
+                accounts: [hubAccount("work", 60)],
+              },
+              { ...source, id: UsageLimitSourceId.make("old"), accounts: [hubAccount("old", 10)] },
+            ],
+          },
+        },
+      ],
+    ]);
+    const emails = (endpoint?: string) =>
+      collectHubLimitPool(claude, input, now, endpoint)?.accounts.map((account) => account.email);
+    expect(emails("http://10.0.100.7:8317/v1")).toEqual(["home@example.com"]);
+    expect(emails("https://hub.example.com")).toEqual(["work@example.com"]);
+    expect(emails("http://elsewhere:8317")).toBeUndefined();
+    expect(emails()).toEqual(["home@example.com", "old@example.com", "work@example.com"]);
   });
 
   it("does not give old credits the timestamp of a newer window-only read", () => {

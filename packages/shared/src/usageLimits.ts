@@ -541,6 +541,48 @@ export function collectLimitPools(
   });
 }
 
+/**
+ * A driver's hub (CLIProxyAPI) accounts, pooled, for a proxied instance that cannot read its own
+ * limits. With `endpoint` (the instance's `auth.endpoint`) only hubs at that origin count; servers
+ * before 0.1.10 do not report it, so then every environment's hubs do.
+ */
+export function collectHubLimitPool(
+  driver: ServerProvider["driver"],
+  presentations: LimitPresentations,
+  now: number,
+  endpoint?: string,
+): LimitPool | null {
+  const endpointOrigin = endpoint === undefined ? undefined : urlOrigin(endpoint);
+  const hubOnly: LimitPresentations = new Map(
+    [...presentations].map(([id, presentation]) => [
+      id,
+      {
+        entry: presentation.entry,
+        serverConfig: presentation.serverConfig && {
+          providers: [],
+          usageLimitSources:
+            endpoint === undefined
+              ? presentation.serverConfig.usageLimitSources
+              : presentation.serverConfig.usageLimitSources?.filter(
+                  (source) =>
+                    endpointOrigin !== null &&
+                    source.origin !== undefined &&
+                    urlOrigin(source.origin) === endpointOrigin,
+                ),
+        },
+      },
+    ]),
+  );
+  const accounts = collectLimitAccounts(hubOnly).filter(
+    (account) => account.driver === driver && limitsNotice(account.limits) === null,
+  );
+  return collectLimitPools(accounts, now)[0] ?? null;
+}
+
+function urlOrigin(value: string): string | null {
+  return URL.parse(value)?.origin ?? null;
+}
+
 function accountSortName(account: LimitAccount): string {
   return (account.displayName ?? account.email ?? account.key).toLowerCase();
 }

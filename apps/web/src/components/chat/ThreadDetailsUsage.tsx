@@ -4,12 +4,17 @@ import type {
   ServerProviderUsageWindow,
   UsageLimitSourceSnapshots,
 } from "@t3tools/contracts";
+import { useAtomValue } from "@effect/atom-react";
 import {
+  collectHubLimitPool,
   collectProviderUsageLimits,
+  displayLimitWindows,
   type LimitPace,
   paceOf,
   paceRemainingPercent,
   remainingPercent,
+  type LimitPool,
+  type LimitPoolWindow,
 } from "@t3tools/shared/usageLimits";
 import { formatDuration, limitsNotice } from "@t3tools/shared/usageLimitsCopy";
 import { Link } from "@tanstack/react-router";
@@ -23,6 +28,7 @@ import { formatContextWindowTokens } from "../../lib/contextWindow";
 import { cn } from "../../lib/utils";
 import { formatUpcomingTimestamp } from "../../timestampFormat";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { environmentPresentations } from "../../state/presentation";
 import { formatContextWindowCompactionMessage } from "./compaction.logic";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 
@@ -51,6 +57,7 @@ export function ThreadDetailsUsage({
   const m = useMessages();
   const nowMinute = useNowMinute();
   const now = Date.parse(`${nowMinute}:00Z`);
+  const presentations = useAtomValue(environmentPresentations.presentationsWithProvidersAtom);
   const report =
     providerInstanceId !== null
       ? collectProviderUsageLimits(providerInstanceId, providers, sources, now)
@@ -62,6 +69,15 @@ export function ThreadDetailsUsage({
     providers.find((provider) => provider.instanceId === providerInstanceId)?.usageLimits;
   if (!limits) return null;
   const notice = limitsNotice(limits, m);
+  const instance = providers.find((entry) => entry.instanceId === providerInstanceId);
+  // A proxied instance (e.g. through CLIProxyAPI) cannot read its own limits; use its hub's.
+  const hubPool =
+    notice && instance
+      ? collectHubLimitPool(instance.driver, presentations, now, instance.auth.endpoint)
+      : null;
+  if (hubPool && hubPool.windows.length > 0) {
+    return <ThreadDetailsHubUsage pool={hubPool} now={now} />;
+  }
 
   return (
     <ThreadDetailsSection
@@ -84,6 +100,76 @@ export function ThreadDetailsUsage({
         )}
       </div>
     </ThreadDetailsSection>
+  );
+}
+
+function ThreadDetailsHubUsage({ pool, now }: { readonly pool: LimitPool; readonly now: number }) {
+  const gt = useGT();
+  return (
+    <ThreadDetailsSection
+      headingId="thread-details-usage-heading"
+      title={gt("Usage limits")}
+      showHeading={false}
+    >
+      <div className="grid grid-cols-[auto_minmax(3rem,1fr)_auto] gap-x-3 text-xs">
+        {displayLimitWindows(pool).map((window) => (
+          <PoolLimitRow key={window.id} window={window} accounts={pool.accounts.length} now={now} />
+        ))}
+      </div>
+    </ThreadDetailsSection>
+  );
+}
+
+function PoolLimitRow({
+  window,
+  accounts,
+  now,
+}: {
+  readonly window: LimitPoolWindow;
+  readonly accounts: number;
+  readonly now: number;
+}) {
+  const gt = useGT();
+  const m = useMessages();
+  const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
+  const left = window.remainingPercent;
+  const next = window.resets.find((reset) => reset.at > now);
+  const source = window.members[0]?.account.sourceLabel;
+  return (
+    <UsageRow
+      label={window.label}
+      fill={left}
+      tone={left <= 10 ? "error" : left <= 20 ? "warning" : null}
+      value={`${left}%`}
+      ariaValue={gt("{left}% left", { left })}
+      opensUsage
+      tooltip={
+        <>
+          <span className="text-foreground">
+            {gt("{label}: {left}% left", { label: window.label, left })}
+          </span>
+          <span className="text-muted-foreground">
+            {accounts === 1 ? "1 account" : `Pooled across ${accounts} accounts`}
+            {source ? ` via ${source}` : ""}
+          </span>
+          {next ? (
+            <span className="text-muted-foreground">
+              Next reset in {formatDuration(next.at - now, m)} ·{" "}
+              {formatUpcomingTimestamp(
+                new Date(next.at).toISOString(),
+                timestampFormat,
+                now,
+                undefined,
+                m,
+              )}
+            </span>
+          ) : null}
+          {window.pace ? (
+            <span className="text-muted-foreground">{m(PACE_LABEL[window.pace])}</span>
+          ) : null}
+        </>
+      }
+    />
   );
 }
 

@@ -1,0 +1,63 @@
+name: Fork desktop build (macOS)
+
+# Builds the patched macOS app for this fork and attaches the DMG to a GitHub release.
+# Push a tag named fork-<upstream version>-<n> (e.g. fork-0.1.9-1) on the patch branch.
+
+on:
+  push:
+    tags:
+      - "fork-*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.repository == 'andromidasj/t3code'
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup dependencies
+        uses: ./.github/actions/setup-ci-deps
+        with:
+          install-args: --filter=@t3tools/desktop... --filter=t3... --filter=@t3tools/web... --filter=@t3tools/scripts...
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+          targets: aarch64-apple-darwin
+
+      # The public T3 Connect identifiers official builds embed (see docs/operations/connect-setup.md).
+      - name: Enable T3 Connect
+        run: cp .env.example .env
+
+      - name: Build JS bundle
+        run: vp run build:desktop:bundle
+
+      # Without GITHUB_REPOSITORY the app embeds no update feed, so it never replaces itself with an
+      # official build. An unsigned app could not install updates from this fork anyway.
+      - name: Build DMG
+        run: env -u GITHUB_REPOSITORY vp run dist:desktop:dmg:arm64
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/fork-')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          notes="Patched build of T3 Code from $(git rev-parse --short HEAD). Patches: see FORK.md."
+          gh release create "$TAG" release/*.dmg --repo "$GITHUB_REPOSITORY" --title "$TAG" --notes "$notes"
+
+      - name: Upload artifact
+        if: ${{ !startsWith(github.ref, 'refs/tags/fork-') }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: t3code-fork-mac
+          path: release/*.dmg
+          retention-days: 7

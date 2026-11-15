@@ -73,6 +73,7 @@ import {
 } from "./timelineScrollAnchoring";
 import { AssistantSelectionToolbar } from "./AssistantSelectionToolbar";
 import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
+import type { ShortcutMatchContext } from "~/keybindings";
 import { type AssistantCitationRequest } from "./AssistantCitationSource";
 import { useAssistantCitationTarget } from "./useAssistantCitationTarget";
 import { worktreeSetupAgentStarted } from "@t3tools/client-runtime/worktree-setup";
@@ -231,6 +232,7 @@ interface MessagesTimelineProps {
     sourceAnchor: AssistantCitationSourceAnchor,
   ) => boolean;
   onReplyToResponse?: TimelineRowSharedState["onReplyToResponse"];
+  getShortcutContext?: () => ShortcutMatchContext;
   isWorking: boolean;
   runlessWorkActive?: boolean;
   activeTurnStartedAt?: string | null;
@@ -350,6 +352,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   citationHistory = CITED_HISTORY_LOADING,
   onCiteAssistantText,
   onReplyToResponse,
+  getShortcutContext,
   isWorking,
   runlessWorkActive = false,
   activeTurnStartedAt = null,
@@ -1430,6 +1433,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
                 viewport={timelineViewportElement}
                 threadRef={citationThreadRef}
                 onCite={onCiteAssistantText}
+                getShortcutContext={getShortcutContext}
               />
             ) : null}
             <LegendList<MessagesTimelineRow>

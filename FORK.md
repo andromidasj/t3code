@@ -11,6 +11,8 @@ from it; servers stay on official releases.
 - Patches stay small and client-only. Anything needing server or protocol changes is not carried.
 - Builds: push tag `fork-<version>-<n>` (e.g. `fork-0.1.9-1`); `.github/workflows/fork-desktop-mac.yml`
   attaches an unsigned Apple Silicon DMG to a release. The app has no update feed.
+- Install or update on the Mac: `fork/t3-fork-update` (quits T3 Code, installs the latest fork release,
+  clears quarantine, reopens). The app can't self-update: macOS updates need a signed build.
 
 ## Patches
 

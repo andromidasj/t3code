@@ -82,6 +82,7 @@ The last matching rule in `keybindings.json` wins, even across different command
 
 - `thread.stop`: Interrupts the running turn (unbound by default).
 - `thread.regenerateTitle`: Regenerates the focused thread's title (unbound by default).
+- `chat.citeSelection`: Cites the text selected in an assistant message, like the **Cite** button over the selection (unbound by default).
 - `thread.undo` (`mod+z`): Undoes recent sidebar actions (unpin, settle, snooze, archive, discard draft) within 5 seconds, including consecutive actions of the same kind.
 - `navigation.back` (`mod+[`) / `navigation.forward` (`mod+]`): Moves through visited pages.
 - `chat.new` / `chat.newLocal` / `chat.newWithoutProject` (`mod+alt+n`): Start new threads using your [new-thread defaults](./thread-sidebar.md#start-a-thread) or [without a project](./thread-sidebar.md#start-without-a-project).

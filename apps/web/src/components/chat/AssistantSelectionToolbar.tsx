@@ -1,3 +1,4 @@
+import { useAtomValue } from "@effect/atom-react";
 import {
   ASSISTANT_CITATION_MAX_TEXT_LENGTH,
   MessageId,
@@ -8,6 +9,7 @@ import { useGT } from "gt-react";
 import { QuoteIcon } from "lucide-react";
 import { use, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { resolveShortcutCommand, type ShortcutMatchContext } from "~/keybindings";
 import {
   captureAssistantTextSelection,
   type AssistantCitationSourceAnchor,
@@ -18,6 +20,7 @@ import {
   resolveSelectionActionPosition,
   type SelectionActionPoint,
 } from "~/lib/selectionActions";
+import { primaryServerKeybindingsAtom } from "~/state/server";
 import { Button } from "../ui/button";
 import { BackgroundThreadContext } from "./backgroundThread";
 
@@ -25,10 +28,12 @@ export function AssistantSelectionToolbar({
   viewport,
   threadRef,
   onCite,
+  getShortcutContext,
 }: {
   viewport: HTMLElement | null;
   threadRef: ScopedThreadRef;
   onCite: (citation: AssistantCitation, sourceAnchor: AssistantCitationSourceAnchor) => boolean;
+  getShortcutContext?: (() => ShortcutMatchContext) | undefined;
 }) {
   const [selection, setSelection] = useState<{
     citation: AssistantCitation;
@@ -39,6 +44,7 @@ export function AssistantSelectionToolbar({
   const actionsRef = useRef<ReturnType<typeof observeSelectionActions> | null>(null);
   const backgroundThread = use(BackgroundThreadContext);
   const gt = useGT();
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- measures the toolbar DOM node and clamps its position inside the window before paint
   useLayoutEffect(() => {
@@ -151,6 +157,19 @@ export function AssistantSelectionToolbar({
     const focusActions = (event: KeyboardEvent) => {
       const toolbar = toolbarRef.current;
       if (
+        toolbar &&
+        !toolbar.disabled &&
+        !event.isComposing &&
+        !event.defaultPrevented &&
+        resolveShortcutCommand(event, keybindings, { context: getShortcutContext?.() ?? {} }) ===
+          "chat.citeSelection"
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        toolbar.click();
+        return;
+      }
+      if (
         event.key !== "Tab" ||
         event.shiftKey ||
         event.altKey ||
@@ -177,7 +196,7 @@ export function AssistantSelectionToolbar({
       actions.dispose();
       actionsRef.current = null;
     };
-  }, [backgroundThread, threadRef, viewport]);
+  }, [backgroundThread, getShortcutContext, keybindings, threadRef, viewport]);
 
   if (!selection) return null;
   const tooLong = selection.citation.text.length > ASSISTANT_CITATION_MAX_TEXT_LENGTH;

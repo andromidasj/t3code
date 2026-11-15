@@ -1973,8 +1973,16 @@ export default function ChatView(props: ChatViewProps) {
       ? activePreviewMiniPlayer
       : null;
   const canvasPreview = useThreadPreviewCanvasSource(activeThreadRef, shownPreviewMiniPlayer);
+  const threadDetailsOpenByDefault = useClientSettings(
+    (settings) => settings.threadDetailsOpenByDefault,
+  );
   const threadPanelInlineOpen = useRightPanelStore((state) =>
-    selectThreadPanelOpen(state.threadPanelVisibilityByThreadKey, activeThreadRef, "inline"),
+    selectThreadPanelOpen(
+      state.threadPanelVisibilityByThreadKey,
+      activeThreadRef,
+      "inline",
+      threadDetailsOpenByDefault,
+    ),
   );
   // Selects only the mode, so canvas resizes rerender the chat view only when the
   // card switches presentation.
@@ -1994,6 +2002,7 @@ export default function ChatView(props: ChatViewProps) {
       state.threadPanelVisibilityByThreadKey,
       activeThreadRef,
       threadPanelPresentation,
+      threadDetailsOpenByDefault,
     ),
   );
   const supportsThreadPullRequests = serverConfig !== null;

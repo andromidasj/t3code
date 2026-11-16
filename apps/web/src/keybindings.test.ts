@@ -362,6 +362,26 @@ describe("thread navigation helpers", () => {
     );
   });
 
+  it("switches right panel tabs with mod+alt arrows on macOS", () => {
+    const options = { platform: "MacIntel", context: { isDesktop: true } };
+    assert.strictEqual(
+      resolveShortcutCommand(
+        event({ key: "ArrowRight", code: "ArrowRight", metaKey: true, altKey: true }),
+        DEFAULT_RESOLVED_KEYBINDINGS,
+        options,
+      ),
+      "rightPanel.nextTab",
+    );
+    assert.strictEqual(
+      resolveShortcutCommand(
+        event({ key: "ArrowLeft", code: "ArrowLeft", metaKey: true, altKey: true }),
+        DEFAULT_RESOLVED_KEYBINDINGS,
+        options,
+      ),
+      "rightPanel.previousTab",
+    );
+  });
+
   it("keeps default thread jumps off the web so the browser can switch tabs", () => {
     const input = event({ key: "1", metaKey: true });
     assert.isNull(

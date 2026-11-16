@@ -55,6 +55,8 @@ const PREVIEW_FORWARDED_COMMANDS = [
   "rightPanel.toggle",
   "rightPanel.toggleMaximized",
   "rightPanel.close",
+  "rightPanel.nextTab",
+  "rightPanel.previousTab",
   "preview.focusUrl",
   "preview.zoomIn",
   "preview.zoomOut",

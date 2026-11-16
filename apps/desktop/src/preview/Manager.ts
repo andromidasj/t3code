@@ -1606,7 +1606,8 @@ const makeNativeOperations = Effect.fn("PreviewManager.makeOperations")(function
             forwarded.command === "workspace.focusPrevious" ||
             forwarded.command === "preview.focusUrl" ||
             forwarded.command === "rightPanel.nextTab" ||
-            forwarded.command === "rightPanel.previousTab"
+            forwarded.command === "rightPanel.previousTab" ||
+            forwarded.command.startsWith("rightPanel.jump.")
           ) {
             // DOM focus in the renderer cannot by itself release the guest's native keyboard focus.
             host.focus();

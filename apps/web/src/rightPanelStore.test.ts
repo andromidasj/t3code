@@ -12,6 +12,7 @@ import {
   selectActiveRightPanel,
   selectActiveRightPanelSurface,
   selectAdjacentRightPanelSurface,
+  selectRightPanelSurfaceAt,
   selectThreadPanelOpen,
   selectThreadPanelVisibility,
   selectThreadRightPanelState,
@@ -60,6 +61,25 @@ describe("rightPanelStore", () => {
     expect(adjacent(-1)).toBe(ids[2]);
     store.close(refA);
     expect(adjacent(1)).toBeUndefined();
+  });
+
+  it("picks the open panel's tab by position, with 9 meaning the last tab", () => {
+    const store = useRightPanelStore.getState();
+    const at = (position: number) =>
+      selectRightPanelSurfaceAt(useRightPanelStore.getState().byThreadKey, refA, position)?.id;
+    store.openFile(refA, "src/app.ts");
+    store.openSideChat(refA, ThreadId.make("side-1"));
+    store.openSideChat(refA, ThreadId.make("side-2"));
+    const ids = selectThreadRightPanelState(
+      useRightPanelStore.getState().byThreadKey,
+      refA,
+    ).surfaces.map((surface) => surface.id);
+    expect(at(1)).toBe(ids[0]);
+    expect(at(3)).toBe(ids[2]);
+    expect(at(4)).toBeUndefined();
+    expect(at(9)).toBe(ids[2]);
+    store.close(refA);
+    expect(at(1)).toBeUndefined();
   });
 
   it("opens a hosted side chat's panel actions in its parent's panel until unhosted", () => {

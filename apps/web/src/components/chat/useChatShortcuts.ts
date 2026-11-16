@@ -22,6 +22,9 @@ type ChatShortcutHandler = (context: {
 
 export type ChatShortcutCommands = Partial<Record<KeybindingCommand, ChatShortcutHandler>>;
 
+const isRightPanelTabCommand = (command: KeybindingCommand) =>
+  command === "rightPanel.nextTab" || command === "rightPanel.previousTab";
+
 interface ChatShortcutsInput {
   readonly enabled: boolean;
   /**
@@ -53,6 +56,18 @@ interface ChatShortcutsInput {
 export function useChatShortcuts(input: ChatShortcutsInput) {
   const embedded = input.embedded === true;
   const composerElement = embedded ? (input.composerElement ?? null) : null;
+  /** A side chat pane runs its own chat shortcuts; only tab switching reaches the panel's owner. */
+  const handleSideChatPaneShortcut = (event: KeyboardEvent) => {
+    if (event.defaultPrevented) return;
+    const command = resolveChatShortcutCommand(event, input.keybindings, input.scriptKeybindings, {
+      context: input.getShortcutContext(event.target),
+    });
+    if (!command || !isRightPanelTabCommand(command)) return;
+    const run = input.commands[command];
+    if (!run || run({ event, terminalFocusOwner: null }) === false) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
   const handleShortcut = useEffectEvent((event: KeyboardEvent) => {
     const { keybindings } = input;
     if (preventRepeatedTerminalCloseShortcut(event, keybindings)) {
@@ -64,7 +79,11 @@ export function useChatShortcuts(input: ChatShortcutsInput) {
       event.stopPropagation();
       return;
     }
-    if (!input.enabled || isCommandPaletteOpen() || isInSideChatPane(event.target)) return;
+    if (!input.enabled || isCommandPaletteOpen()) return;
+    if (isInSideChatPane(event.target)) {
+      handleSideChatPaneShortcut(event);
+      return;
+    }
     const terminalFocusOwner = getTerminalFocusOwner();
     if (event.defaultPrevented && terminalFocusOwner === null) return;
     const shortcutContext = input.getShortcutContext(event.target);

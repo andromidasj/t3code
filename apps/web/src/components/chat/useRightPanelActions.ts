@@ -8,7 +8,11 @@ import { formatFilePathForClipboard } from "@t3tools/client-runtime/media-action
 import { resolvePathLinkTarget } from "@t3tools/shared/fileLinks";
 import { getClientSettings } from "../../hooks/useSettings";
 import { useStableCallback } from "../../hooks/useStableCallback";
-import { type ScopedThreadRef, type RunId } from "@t3tools/contracts";
+import {
+  RIGHT_PANEL_JUMP_KEYBINDING_COMMANDS,
+  type ScopedThreadRef,
+  type RunId,
+} from "@t3tools/contracts";
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { useEffect } from "react";
 import {
@@ -19,6 +23,7 @@ import { useDiffPanelStore } from "../../diffPanelStore";
 import { type ThreadPanelPresentation } from "../../rightPanelLayout";
 import {
   selectAdjacentRightPanelSurface,
+  selectRightPanelSurfaceAt,
   selectThreadPanelOpen,
   type RightPanelSurface,
   useRightPanelStore,
@@ -232,6 +237,22 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
   const activateAdjacentRightPanelSurfaceStable = useStableCallback(
     activateAdjacentRightPanelSurface,
   );
+  const activateRightPanelSurfaceAt = (position: number) => {
+    const surface = selectRightPanelSurfaceAt(
+      useRightPanelStore.getState().byThreadKey,
+      activeThreadRef,
+      position,
+    );
+    if (!surface) return false;
+    activateRightPanelSurface(surface);
+  };
+  const activateRightPanelSurfaceAtStable = useStableCallback(activateRightPanelSurfaceAt);
+  const rightPanelJumpShortcuts: ChatShortcutCommands = Object.fromEntries(
+    RIGHT_PANEL_JUMP_KEYBINDING_COMMANDS.map((command, index) => [
+      command,
+      () => activateRightPanelSurfaceAt(index + 1),
+    ]),
+  );
   const toggleRightPanel = () => {
     if (!activeThreadRef) return;
     if (rightPanelOpen) {
@@ -340,6 +361,7 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
     },
     "rightPanel.nextTab": () => activateAdjacentRightPanelSurface(1),
     "rightPanel.previousTab": () => activateAdjacentRightPanelSurface(-1),
+    ...rightPanelJumpShortcuts,
     "diff.toggle": () => onToggleDiff(),
   } satisfies ChatShortcutCommands;
 
@@ -347,6 +369,7 @@ export function useRightPanelActions(input: RightPanelActionsInput) {
     shortcuts,
     activateRightPanelSurfaceStable,
     activateAdjacentRightPanelSurfaceStable,
+    activateRightPanelSurfaceAtStable,
     addDeviceSurfaceStable,
     addDiffSurfaceStable,
     addFilesSurfaceStable,

@@ -1,4 +1,8 @@
-import type { KeybindingCommand, ResolvedKeybindingsConfig } from "@t3tools/contracts";
+import {
+  RIGHT_PANEL_JUMP_KEYBINDING_COMMANDS,
+  type KeybindingCommand,
+  type ResolvedKeybindingsConfig,
+} from "@t3tools/contracts";
 import { useEffect, useEffectEvent } from "react";
 import { isCommandPaletteOpen } from "../../commandPaletteBus";
 import { resolveChatShortcutCommand, type ShortcutMatchContext } from "../../keybindings";
@@ -29,6 +33,7 @@ const SIDE_CHAT_PANE_COMMANDS: ReadonlySet<KeybindingCommand> = new Set([
   "rightPanel.toggleMaximized",
   "rightPanel.nextTab",
   "rightPanel.previousTab",
+  ...RIGHT_PANEL_JUMP_KEYBINDING_COMMANDS,
 ]);
 
 interface ChatShortcutsInput {

@@ -361,8 +361,24 @@ describe("thread navigation helpers", () => {
     );
   });
 
-  it("switches right panel tabs with mod+alt arrows on macOS", () => {
+  it("switches right panel tabs with mod+alt digits and arrows on macOS", () => {
     const options = { platform: "MacIntel", context: { isDesktop: true } };
+    assert.strictEqual(
+      resolveShortcutCommand(
+        event({ key: "¡", code: "Digit1", metaKey: true, altKey: true }),
+        DEFAULT_RESOLVED_KEYBINDINGS,
+        options,
+      ),
+      "rightPanel.jump.1",
+    );
+    assert.strictEqual(
+      resolveShortcutCommand(
+        event({ key: "ª", code: "Digit9", metaKey: true, altKey: true }),
+        DEFAULT_RESOLVED_KEYBINDINGS,
+        options,
+      ),
+      "rightPanel.jump.9",
+    );
     assert.strictEqual(
       resolveShortcutCommand(
         event({ key: "ArrowRight", code: "ArrowRight", metaKey: true, altKey: true }),
@@ -378,6 +394,14 @@ describe("thread navigation helpers", () => {
         options,
       ),
       "rightPanel.previousTab",
+    );
+    assert.strictEqual(
+      resolveShortcutCommand(
+        event({ key: "1", code: "Digit1", metaKey: true }),
+        DEFAULT_RESOLVED_KEYBINDINGS,
+        options,
+      ),
+      "thread.jump.1",
     );
   });
 

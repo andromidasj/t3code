@@ -4,6 +4,7 @@ import {
   type KeybindingShortcut,
   MODEL_PICKER_JUMP_KEYBINDING_COMMANDS,
   type ScopedThreadRef,
+  RIGHT_PANEL_JUMP_KEYBINDING_COMMANDS,
   THREAD_JUMP_KEYBINDING_COMMANDS,
 } from "@t3tools/contracts";
 import {
@@ -60,6 +61,7 @@ const HTML_RENDER_SHORTCUT_COMMANDS: ReadonlySet<KeybindingCommand> = new Set([
   "rightPanel.toggleMaximized",
   "rightPanel.nextTab",
   "rightPanel.previousTab",
+  ...RIGHT_PANEL_JUMP_KEYBINDING_COMMANDS,
   "threadPanel.toggle",
   "terminal.toggle",
   "preview.toggle",

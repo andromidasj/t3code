@@ -23,7 +23,9 @@ type ChatShortcutHandler = (context: {
 export type ChatShortcutCommands = Partial<Record<KeybindingCommand, ChatShortcutHandler>>;
 
 const isRightPanelTabCommand = (command: KeybindingCommand) =>
-  command === "rightPanel.nextTab" || command === "rightPanel.previousTab";
+  command === "rightPanel.nextTab" ||
+  command === "rightPanel.previousTab" ||
+  command.startsWith("rightPanel.jump.");
 
 interface ChatShortcutsInput {
   readonly enabled: boolean;

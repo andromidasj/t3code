@@ -1498,6 +1498,20 @@ export function selectAdjacentRightPanelSurface(
   return surfaces[(index + step + surfaces.length) % surfaces.length] ?? null;
 }
 
+/**
+ * The open panel's tab at 1-based `position`, with 9 meaning the last tab like browser tabs;
+ * null when the panel is closed or has no such tab.
+ */
+export function selectRightPanelSurfaceAt(
+  byThreadKey: Record<string, ThreadRightPanelState>,
+  ref: ScopedThreadRef | null | undefined,
+  position: number,
+): RightPanelSurface | null {
+  const { isOpen, surfaces } = selectThreadRightPanelState(byThreadKey, ref);
+  if (!isOpen) return null;
+  return (position === 9 ? surfaces.at(-1) : surfaces[position - 1]) ?? null;
+}
+
 export function selectSelectedRightPanelSurface(
   byThreadKey: Record<string, ThreadRightPanelState>,
   ref: ScopedThreadRef | null | undefined,

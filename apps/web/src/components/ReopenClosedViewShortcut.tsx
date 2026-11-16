@@ -6,7 +6,7 @@ import {
   scopedThreadKey,
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
-import type { ScopedThreadRef } from "@t3tools/contracts";
+import { RIGHT_PANEL_JUMP_KEYBINDING_COMMANDS, type ScopedThreadRef } from "@t3tools/contracts";
 import { linkOptions, useNavigate, useParams, useRouter } from "@tanstack/react-router";
 import { useGT } from "gt-react";
 import { useEffect, useEffectEvent, useRef } from "react";
@@ -65,6 +65,7 @@ const PREVIEW_FORWARDED_COMMANDS = [
   "rightPanel.close",
   "rightPanel.nextTab",
   "rightPanel.previousTab",
+  ...RIGHT_PANEL_JUMP_KEYBINDING_COMMANDS,
   "preview.focusUrl",
   "preview.zoomIn",
   "preview.zoomOut",

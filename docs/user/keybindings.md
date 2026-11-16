@@ -25,6 +25,10 @@ Configure whether `Enter` sends or requires `mod+Enter` in **Settings â†’ Chat â
 
 In the model picker, use `Left`/`Shift+Tab` to move to the provider list, `Right` to return to search or move into effort levels, and `Up`/`Down`/`Enter` to select.
 
+## Switch right panel tabs
+
+`mod+alt+right` and `mod+alt+left` move to the next and previous tab in the open right panel, wrapping at either end. They work while you type in a side chat too. They are desktop-only by default, because Chrome on macOS keeps those keys for switching browser tabs. In a browser, bind your own keys under **Right Panel: Next Tab** and **Right Panel: Previous Tab**.
+
 ## Copy pull request and thread references
 
 - `mod+shift+c`: Copies the open PR's URL (or copies a thread chip link when no PR is open).

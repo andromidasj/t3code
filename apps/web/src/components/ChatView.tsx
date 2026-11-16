@@ -2549,6 +2549,7 @@ export default function ChatView(props: ChatViewProps) {
     : null;
   const {
     activateRightPanelSurfaceStable,
+    activateAdjacentRightPanelSurfaceStable,
     addDeviceSurfaceStable,
     addDiffSurfaceStable,
     addFilesSurfaceStable,
@@ -3011,6 +3012,8 @@ export default function ChatView(props: ChatViewProps) {
       if (action === "rightPanel.toggle") toggleRightPanelStable();
       else if (action === "rightPanel.toggleMaximized") toggleRightPanelMaximizedStable();
       else if (action === "rightPanel.close") closeActiveRightPanelSurfaceStable();
+      else if (action === "rightPanel.nextTab") activateAdjacentRightPanelSurfaceStable(1);
+      else if (action === "rightPanel.previousTab") activateAdjacentRightPanelSurfaceStable(-1);
     });
   }, [
     embedded,
@@ -3018,6 +3021,7 @@ export default function ChatView(props: ChatViewProps) {
     toggleRightPanelStable,
     toggleRightPanelMaximizedStable,
     closeActiveRightPanelSurfaceStable,
+    activateAdjacentRightPanelSurfaceStable,
   ]);
 
   usePasteToFocusComposer(embedded ? null : activeThreadId, composerRef);

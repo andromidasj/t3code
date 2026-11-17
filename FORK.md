@@ -23,8 +23,9 @@ keeps your sign-in, settings and threads.
 4. Per-Mac settings the fork adds:
    - Settings → Keybindings: bind `chat.citeSelection` (e.g. ⌘L).
    - Settings → Appearance → Thread details: untick "Open in new threads".
-   - Thread details limits for CLIProxyAPI threads come from Settings → Usage Providers on any
-     connected environment; add it there if the pane still says "Unavailable".
+   - Thread details limits for CLIProxyAPI threads (official since 0.1.12) come from Settings →
+     Usage Providers; the hub's URL there must use the same host and port as the provider's base
+     URL, or the pane says "Unavailable".
 
 To update later, run `t3-fork-update` again. Options: `-y` skips the quit question, `--force`
 reinstalls the current release.
@@ -41,11 +42,10 @@ reinstalls the current release.
 
 ## Patches
 
-| Patch                                                                   | Upstream                   | Drop when                                          |
-| ----------------------------------------------------------------------- | -------------------------- | -------------------------------------------------- |
-| Thread details show pooled CLIProxyAPI hub limits for proxied providers | issue #30990               | upstream pane shows hub limits for proxied threads |
-| Restore macOS cursor auto-hide while typing                             | reverts part of c2d44a312c | upstream hides the cursor while typing             |
-| Bindable `chat.citeSelection` command                                   | PR #34656                  | that PR or an equivalent merges                    |
-| "Open in new threads" setting for Thread details                        | PR #25598                  | that PR or an equivalent merges                    |
-| ⌘⌥←/→ switch to the next/previous right panel tab                       | PR #34437                  | that PR or an equivalent merges                    |
-| ⌘⌥1–9 jump to a right panel tab (9 = last)                              | none (fork-only)           | upstream ships tab jump shortcuts                  |
+| Patch                                             | Upstream                   | Drop when                              |
+| ------------------------------------------------- | -------------------------- | -------------------------------------- |
+| Restore macOS cursor auto-hide while typing       | reverts part of c2d44a312c | upstream hides the cursor while typing |
+| Bindable `chat.citeSelection` command             | PR #34656                  | that PR or an equivalent merges        |
+| "Open in new threads" setting for Thread details  | PR #25598                  | that PR or an equivalent merges        |
+| ⌘⌥←/→ switch to the next/previous right panel tab | PR #34437                  | that PR or an equivalent merges        |
+| ⌘⌥1–9 jump to a right panel tab (9 = last)        | none (fork-only)           | upstream ships tab jump shortcuts      |

@@ -31,6 +31,7 @@ import {
 } from "./useScopedSettings";
 import { useOptionalSettingsScope, useSettingsScope } from "./SettingsScopeContext";
 import { firstManagedDenial, usePrimaryManagedPolicy } from "~/state/managedPolicy";
+import { ForkSettingsSection } from "~/fork/ForkSettingsSection";
 
 /** Features still settling in. */
 export function LabsSettingsPanel() {
@@ -49,6 +50,7 @@ export function LabsSettingsPanel() {
         <FastWorktreeCheckoutRow />
         <AgentFeedbackRow />
       </SettingsSection>
+      <ForkSettingsSection />
     </SettingsPageContainer>
   );
 }

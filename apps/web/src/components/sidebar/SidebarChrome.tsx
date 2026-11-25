@@ -42,6 +42,7 @@ import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUp
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { observeResize } from "~/lib/observeResize";
 import { SharedTooltipTrigger } from "../ui/shared-tooltip";
+import { SidebarBoardButton } from "~/fork/SidebarBoardButton";
 
 export const SidebarChromeHeader = memo(function SidebarChromeHeader({
   isElectron,
@@ -280,6 +281,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
         </SidebarMenuItem>
       ) : (
         <>
+          <SidebarBoardButton />
           <SidebarUtilityItem
             icon={<SettingsIcon />}
             label={gt("Settings")}

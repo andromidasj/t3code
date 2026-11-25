@@ -30,6 +30,10 @@ keeps your sign-in, settings and threads.
      `~/dev/bot/.board`). The desktop app reads `data.json` there, or the data `index.html` embeds.
      "Collapse routine bot updates" (on by default) folds finished agent-to-agent and scheduled
      turns into one "Bot activity" strip; running, failed, waiting and 👉 turns stay open.
+     "Sidebar filter and Bot / Background" (on by default) adds All | Mine | Needs me under the
+     sidebar's pages and folds threads bots started that you never wrote in (no 👉 title, nothing
+     waiting on you) into a collapsible Bot / Background section. With projects picked in the
+     sidebar's project menu, "Save view" keeps that set as a chip; rename or delete views here.
    - Settings → Scheduled tasks: each task's Delivery (Silent, Updates only, Always) is stored as a
      trailing `[t3-delivery: <mode>]` line on its prompt, which the agent reads and the app hides.
      Silent and Updates only skip the "Thread completed" notice for that task's runs on this Mac;
@@ -68,3 +72,4 @@ reinstalls the current release.
 | Board right panel, sidebar pages, "Open in" desk  | none (fork-only)           | the Board patch is dropped             |
 | Collapse routine bot updates in threads           | none (fork-only)           | upstream folds agent-to-agent turns    |
 | Scheduled task delivery modes                     | none (fork-only)           | upstream ships per-task notify modes   |
+| Sidebar All/Mine/Needs me, Bot / Background       | none (fork-only)           | upstream separates bot threads         |

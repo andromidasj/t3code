@@ -324,6 +324,8 @@ describe("fork settings storage", () => {
       openBoardOnLaunch: true,
       sidebarPages: DEFAULT_FORK_SETTINGS.sidebarPages,
       collapseAgentTurns: true,
+      sidebarHierarchyEnabled: true,
+      sidebarFilterPresets: [],
     };
     expect(readForkSettings(storage)).toEqual(expected);
     expect(JSON.parse(storage.values.get(FORK_SETTINGS_STORAGE_KEY) ?? "null")).toEqual(expected);

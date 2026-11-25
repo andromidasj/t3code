@@ -23,6 +23,7 @@ import * as NetService from "@t3tools/shared/Net";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 
 import * as DesktopIpc from "./ipc/DesktopIpc.ts";
+import { registerForkBoardDataIpc } from "./fork/boardData.ts";
 import * as ElectronApp from "./electron/ElectronApp.ts";
 import * as ElectronDialog from "./electron/ElectronDialog.ts";
 import * as ElectronMenu from "./electron/ElectronMenu.ts";
@@ -256,4 +257,5 @@ const layerDesktopRuntime = layerDesktopClerk.pipe(
   Layer.provideMerge(DesktopPreReadyPlatform.layer),
 );
 
+registerForkBoardDataIpc(Electron.ipcMain);
 DesktopApp.program.pipe(Effect.provide(layerDesktopRuntime), NodeRuntime.runMain);

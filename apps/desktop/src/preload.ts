@@ -573,3 +573,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
     },
   },
 } satisfies DesktopBridge);
+
+// Fork-only, outside DesktopBridge so the contracts package stays as upstream ships it.
+contextBridge.exposeInMainWorld("t3ForkBridge", {
+  readBoardData: (source: string) => ipcRenderer.invoke("t3fork:readBoardData", source),
+});

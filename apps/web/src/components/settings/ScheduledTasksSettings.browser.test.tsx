@@ -424,3 +424,63 @@ describe("ScheduledTasksSettings", () => {
     await expect.element(name).toHaveValue("My draft");
   });
 });
+
+// Fork: scheduled task delivery modes (apps/web/src/fork/scheduledDelivery.ts).
+describe("ScheduledTasksSettings delivery", () => {
+  const marked = { ...task, prompt: "Review open issues\n\n[t3-delivery: silent]" };
+
+  it("edits the mode apart from the prompt and saves it back as one marker line", async () => {
+    setupEffortTask();
+    state.tasks = [{ ...state.tasks[0]!, prompt: marked.prompt }];
+    await using _screen = await render(<ScheduledTasksSettings taskId={task.id} />);
+    const prompt = page.getByRole("textbox", { name: "Prompt", exact: true });
+    await expect.element(prompt).toHaveValue("Review open issues");
+    const delivery = page.getByRole("group", { name: "Delivery", exact: true });
+    await expect
+      .element(delivery.getByRole("button", { name: "Silent" }))
+      .toHaveAttribute("aria-pressed", "true");
+    await delivery.getByRole("button", { name: "Updates only" }).click();
+    await expect
+      .element(delivery.getByRole("button", { name: "Updates only" }))
+      .toHaveAttribute("aria-pressed", "true");
+    await expect.element(page.getByText(/the agent speaks up only when it has news/)).toBeVisible();
+    await page.getByRole("button", { name: "Save task" }).click();
+    await vi.waitFor(() =>
+      expect(state.upsert).toHaveBeenLastCalledWith(expect.anything(), {
+        environmentId,
+        input: expect.objectContaining({
+          prompt: "Review open issues\n\n[t3-delivery: updates-only]",
+        }),
+      }),
+    );
+  });
+
+  it("switches a task's mode from its row, keeping every other field", async () => {
+    setup();
+    state.tasks = [marked];
+    await using screen = await render(<ScheduledTasksSettings />);
+    await expect.element(screen.getByText("Review open issues", { exact: true })).toBeVisible();
+    expect(screen.container.textContent).not.toContain("[t3-delivery");
+    const delivery = page.getByRole("group", { name: "Delivery for Review issues" });
+    await delivery.getByRole("button", { name: "Always" }).click();
+    await vi.waitFor(() =>
+      expect(state.upsert).toHaveBeenLastCalledWith(expect.anything(), {
+        environmentId,
+        input: {
+          id: task.id,
+          requireExisting: true,
+          title: task.title,
+          prompt: "Review open issues\n\n[t3-delivery: always]",
+          enabled: task.enabled,
+          schedule: task.schedule,
+          projectId: task.projectId,
+          workspaceStrategy: task.workspaceStrategy,
+          modelSelection: task.modelSelection,
+          runtimeMode: task.runtimeMode,
+          interactionMode: task.interactionMode,
+          creationSource: task.creationSource,
+        },
+      }),
+    );
+  });
+});

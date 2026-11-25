@@ -2546,3 +2546,16 @@ it("keeps concurrent approvals actionable outside collapsed work and restores se
     .element(screen.getByRole("button", { name: "Open the current tab", exact: true }))
     .toBeVisible();
 });
+
+// Fork: scheduled task delivery modes (apps/web/src/fork/scheduledDelivery.ts).
+describe("MessagesTimeline scheduled delivery marker", () => {
+  it("keeps the delivery marker out of an automation prompt's bubble", async () => {
+    setup();
+    await using screen = await renderTimeline([
+      message(`${AUTOMATION_PROMPT}\n\n[t3-delivery: updates-only]`, { scheduledTaskId: TASK_ID }),
+    ]);
+    await click(screen.button(/^Automation/));
+    expect(screen.text()).toContain("Label every new issue and close duplicates.");
+    expect(screen.text()).not.toContain("t3-delivery");
+  });
+});

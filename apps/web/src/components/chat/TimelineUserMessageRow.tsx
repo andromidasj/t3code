@@ -79,6 +79,7 @@ import {
 import { chatMarkdownClipboardPayload } from "../../markdown-clipboard";
 import type { ChatMarkdownContextReference } from "../ChatMarkdown";
 import { cn } from "~/lib/utils";
+import { withoutScheduledDeliveryDirective } from "~/fork/scheduledDelivery";
 import { markdownProseDirection } from "~/textDirection";
 import { useMediaQuery } from "~/hooks/useMediaQuery";
 import { formatChatTimestampTooltip, formatDayAwareTimestamp } from "../../timestampFormat";
@@ -302,7 +303,9 @@ function AutomationMessageRow({ row }: { row: Extract<TimelineRow, { kind: "mess
   const gt = useGT();
   const [expanded, setExpanded] = useState(false);
   const revealRef = findRevealRef(() => setExpanded(true));
-  const { text, scheduledTaskId } = resolveUserMessagePresentation(row.message);
+  const { text, scheduledTaskId } = withoutScheduledDeliveryDirective(
+    resolveUserMessagePresentation(row.message),
+  );
   const summary =
     useScheduledTaskTitle(ctx.activeThreadEnvironmentId, scheduledTaskId) ??
     text.trim().split(/\r?\n/, 1)[0] ??

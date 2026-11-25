@@ -121,7 +121,7 @@ export function countNeedsMe(threads: ReadonlyArray<BoardThreadInput>): number {
   return count;
 }
 
-export type BoardView = "all" | "needs-me" | "running" | "today" | "web";
+export type BoardView = "all" | "needs-me" | "running" | "today" | "jobs" | "web";
 
 /**
  * The board's URL state: its view and desk filter. Keys carry a `board` prefix because the router
@@ -138,6 +138,7 @@ const BOARD_VIEWS: ReadonlySet<string> = new Set<BoardView>([
   "needs-me",
   "running",
   "today",
+  "jobs",
   "web",
 ]);
 

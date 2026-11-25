@@ -6,10 +6,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { type MouseEvent } from "react";
 import { msg } from "gt-react";
 
-import {
-  resolveChangeRequestLinkTarget,
-  resolvePullRequestPreviewTarget,
-} from "@t3tools/client-runtime/change-request-links";
+import { resolvePullRequestPreviewTarget } from "@t3tools/client-runtime/change-request-links";
+import { resolveChangeRequestLinkTargetAnywhere } from "~/fork/changeRequestLinkFallback";
 
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 
@@ -54,7 +52,7 @@ export function pullRequestLinkPanelTarget(input: {
   // subscribing would hand every rendered link a new handler. Projects likewise, so a
   // link can resolve against a snapshot that arrived after this handler was built.
   const serverConfigs = appAtomRegistry.get(environmentServerConfigsAtom);
-  return resolveChangeRequestLinkTarget({
+  return resolveChangeRequestLinkTargetAnywhere({
     url: input.url,
     projects: readProjects(),
     configLoaded: (environmentId) => serverConfigs.has(environmentId),

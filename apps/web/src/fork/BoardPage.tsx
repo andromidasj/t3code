@@ -1,10 +1,28 @@
-import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { useAtomValue } from "@effect/atom-react";
+import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@t3tools/contracts";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { T, useGT } from "gt-react";
-import { ArrowLeftIcon, ChevronRightIcon, ExternalLinkIcon, PlugIcon } from "lucide-react";
-import { useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import {
+  ArrowLeftIcon,
+  ArrowUpRightIcon,
+  ChevronRightIcon,
+  ExternalLinkIcon,
+  FileTextIcon,
+  MessageSquareIcon,
+  PlugIcon,
+  XIcon,
+} from "lucide-react";
+import {
+  useEffect,
+  useEffectEvent,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 
+import { PanelLayoutControls } from "~/components/chat/PanelLayoutControls";
 import ChatMarkdown from "~/components/ChatMarkdown";
 import { RelativeTime } from "~/components/RelativeTime";
 import { Badge } from "~/components/ui/badge";
@@ -17,12 +35,17 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { WorkspaceBreadcrumb, WorkspaceBreadcrumbItem } from "~/components/WorkspaceBreadcrumb";
 import { WorkspacePageContainer } from "~/components/WorkspacePageContainer";
 import { WorkspacePageHeader } from "~/components/WorkspacePageHeader";
+import { isCommandPaletteOpen } from "~/commandPaletteBus";
 import { isElectron } from "~/env";
 import { usePrimarySettings } from "~/hooks/useSettings";
+import { resolveShortcutCommand, shortcutLabelForCommand } from "~/keybindings";
 import { cn } from "~/lib/utils";
 import { readLocalApi } from "~/localApi";
+import { usePanelAnimationSettings, usePanelPresence } from "~/panelAnimations";
+import { selectThreadRightPanelState, useRightPanelStore } from "~/rightPanelStore";
 import { useProjects, useVisibleThreadShells } from "~/state/entities";
 import { useConnectedEnvironmentIds, useEnvironments } from "~/state/environments";
+import { primaryServerKeybindingsAtom } from "~/state/server";
 import { formatShortTimestamp } from "~/timestampFormat";
 
 import {
@@ -40,11 +63,11 @@ import {
   plainBoardText,
   rankBoardItems,
   rewriteBoardThreadLinks,
-  type BoardItemPane,
   type BoardItemRow,
   type BoardRow,
   type BoardSearch,
   type BoardThreadInput,
+  type BoardThreadRef,
   type BoardTodayRow,
   type BoardUrgency,
   type BoardView,
@@ -53,17 +76,32 @@ import { DeskBadge, ItemTypeBadge, NotReadyBadge, WhenBadge } from "./boardBadge
 import { useBoardData, type BoardDataHandle } from "./boardData";
 import { BoardItemDetailPanel } from "./BoardItemDetailPanel";
 import { useLeaveBoard } from "./boardNavigation";
-import { BoardThreadPanel, IconAction } from "./boardPanels";
+import {
+  BOARD_CHAT_TAB,
+  BOARD_DETAILS_TAB,
+  BOARD_THREAD_TAB,
+  boardOverlayOpen,
+  boardPanelShortcutAction,
+  shouldEscapeCloseBoardPanel,
+  type BoardPanelSelection,
+} from "./boardPanel.logic";
+import {
+  BoardRightPanel,
+  BoardSideThread,
+  IconAction,
+  boardPanelHostRef,
+  boardShortcutContext,
+  useBoardPanelModel,
+} from "./boardPanels";
+import {
+  closeBoardPanel,
+  openBoardPanel,
+  reopenBoardPanel,
+  useBoardPanelStore,
+} from "./boardPanelStore";
 import { normalizeBoardUrl, useForkSettings } from "./forkSettings";
 
 type ThreadOpener = (thread: BoardThreadInput, full: boolean) => void;
-
-const NO_SELECTION: Partial<BoardSearch> = {
-  boardItem: undefined,
-  boardPane: undefined,
-  boardEnvironmentId: undefined,
-  boardThreadId: undefined,
-};
 
 export function BoardPage() {
   const gt = useGT();
@@ -78,10 +116,15 @@ export function BoardPage() {
   const { environments } = useEnvironments();
   const connectedIds = useConnectedEnvironmentIds();
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
+  const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  const panel = useBoardPanelStore();
 
   const data = board.data;
   const deskColors = boardDeskColors(data);
   const deskCounts = boardDeskCounts(data);
+  const deskThreads = new Map(
+    (data?.desks ?? []).map((desk) => [desk.slug, findDeskThreadRef(desk, projects, threads)]),
+  );
   const filterDesk =
     search.boardDesk === undefined
       ? null
@@ -106,64 +149,180 @@ export function BoardPage() {
   const today = collectBoardToday(data, filterDesk?.slug ?? null);
   const readyItemCount = items.ranked.filter((row) => row.item.banner === null).length;
   const needsMeCount = model.needsMe.length + readyItemCount;
-  const markdownEnvironmentId = connectedIds[0] ?? null;
+  const primaryConnectedId = connectedIds[0] ?? null;
 
   const view: BoardView =
     search.boardView === "web" && webUrl === null ? "all" : (search.boardView ?? "all");
 
-  const selectedRef =
-    search.boardEnvironmentId !== undefined && search.boardThreadId !== undefined
-      ? scopeThreadRef(
-          EnvironmentId.make(search.boardEnvironmentId),
-          ThreadId.make(search.boardThreadId),
-        )
-      : null;
+  // The panel: the selection, the environment its tabs live in, and its tabs.
+  const selection = panel.selection;
   const selectedThreadKey =
-    selectedRef === null
-      ? null
-      : boardThreadKey({ environmentId: selectedRef.environmentId, id: selectedRef.threadId });
-  const selectedItemKey = selectedRef === null ? (search.boardItem ?? null) : null;
+    selection?.kind === "thread"
+      ? boardThreadKey({
+          environmentId: EnvironmentId.make(selection.environmentId),
+          id: ThreadId.make(selection.threadId),
+        })
+      : null;
+  const selectedItemKey = selection?.kind === "item" ? selection.key : null;
   const selectedItem = selectedItemKey === null ? null : findBoardItem(data, selectedItemKey);
   const selectedDeskThread =
-    selectedItem === null ? null : findDeskThreadRef(selectedItem.desk, projects, threads);
-  const selectedDeskThreadRef =
-    selectedDeskThread === null
-      ? null
-      : scopeThreadRef(
-          EnvironmentId.make(selectedDeskThread.environmentId),
-          ThreadId.make(selectedDeskThread.threadId),
-        );
+    selectedItem === null ? null : (deskThreads.get(selectedItem.desk.slug) ?? null);
+  const hostEnvironmentFor = (target: BoardPanelSelection): string | null => {
+    if (target.kind === "thread") return target.environmentId;
+    if (target.kind === "item") {
+      const found = findBoardItem(data, target.key);
+      const deskThread = found === null ? null : (deskThreads.get(found.desk.slug) ?? null);
+      if (deskThread !== null) return deskThread.environmentId;
+    }
+    return primaryConnectedId;
+  };
+  const hostRefFor = (target: BoardPanelSelection) => {
+    const environmentId = hostEnvironmentFor(target);
+    return environmentId === null ? null : boardPanelHostRef(environmentId, target);
+  };
+  const hostRef = selection === null ? null : hostRefFor(selection);
+  const linksRef = hostRefFor(BOARD_LINKS_SELECTION);
+  const panelModel = useBoardPanelModel(
+    selection ?? BOARD_LINKS_SELECTION,
+    hostRef,
+    selectedDeskThread !== null,
+  );
+  // A Today selection whose pull request tabs were all closed has nothing left to show.
+  const panelAvailable = selection !== null && panelModel.tabIds.length > 0;
+  const panelOpen = panel.open && panelAvailable;
+  const { active: panelAnimationsActive, durationMs } = usePanelAnimationSettings();
+  const presence = usePanelPresence(
+    panelOpen,
+    selection,
+    panelAnimationsActive,
+    "board",
+    durationMs,
+  );
 
   const updateSearch = (patch: Partial<BoardSearch>) =>
     void navigate({ to: "/board", search: (previous) => ({ ...previous, ...patch }) });
 
-  const openFullThread = (ref: ScopedThreadRef) =>
+  const openFullThread = (ref: BoardThreadRef) =>
     void navigate({
       to: "/$environmentId/$threadId",
-      params: { environmentId: ref.environmentId, threadId: ref.threadId },
+      params: {
+        environmentId: EnvironmentId.make(ref.environmentId),
+        threadId: ThreadId.make(ref.threadId),
+      },
     });
+
+  // A pick from the list starts on the selection's first tab.
+  const openSelection = (target: BoardPanelSelection, tabId: string) => {
+    const ref = hostRefFor(target);
+    const revision =
+      ref === null
+        ? 0
+        : (useRightPanelStore.getState().userActionRevisionByThreadKey[scopedThreadKey(ref)] ?? 0);
+    openBoardPanel(target, { tabId, revision });
+  };
 
   const openThread: ThreadOpener = (thread, full) => {
     if (full) {
-      openFullThread(scopeThreadRef(thread.environmentId, thread.id));
+      openFullThread({ environmentId: thread.environmentId, threadId: thread.id });
       return;
     }
-    updateSearch({
-      ...NO_SELECTION,
-      boardEnvironmentId: thread.environmentId,
-      boardThreadId: thread.id,
-    });
+    openSelection(
+      { kind: "thread", environmentId: thread.environmentId, threadId: thread.id },
+      BOARD_THREAD_TAB,
+    );
   };
 
-  const openItem = (key: string) => updateSearch({ ...NO_SELECTION, boardItem: key });
-  const closePanel = () => updateSearch(NO_SELECTION);
+  const openItem = (key: string) => openSelection({ kind: "item", key }, BOARD_DETAILS_TAB);
+  const deskOpener = (row: BoardItemRow) => {
+    const ref = deskThreads.get(row.desk.slug) ?? null;
+    return ref === null ? null : () => openFullThread(ref);
+  };
+
+  const togglePanel = () => {
+    if (panelOpen) closeBoardPanel();
+    else reopenBoardPanel();
+  };
+
+  const onPanelKeyDown = useEffectEvent((event: KeyboardEvent) => {
+    if (isCommandPaletteOpen()) return;
+    if (
+      panelOpen &&
+      shouldEscapeCloseBoardPanel(
+        event,
+        event.target instanceof Element ? event.target : null,
+        boardOverlayOpen(document),
+      )
+    ) {
+      event.preventDefault();
+      closeBoardPanel();
+      return;
+    }
+    if (event.defaultPrevented) return;
+    const command = resolveShortcutCommand(event, keybindings, {
+      context: { ...boardShortcutContext(), rightPanelOpen: panelOpen },
+    });
+    const action = boardPanelShortcutAction(command, {
+      open: panelOpen,
+      canOpen: panelAvailable,
+      tabIds: panelModel.tabIds,
+      activeId: panelModel.activeTabId,
+    });
+    if (action === null) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.repeat) return;
+    if (action.type === "toggle") togglePanel();
+    else if (action.type === "activate") panelModel.activate(action.tabId);
+    else if (panelModel.pullRequests.some((surface) => surface.id === panelModel.activeTabId)) {
+      // Like the Issues page, closing takes the pull request tab first.
+      panelModel.closePullRequest(panelModel.activeTabId ?? "");
+    } else closeBoardPanel();
+  });
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to the document right panel shortcuts and Escape while the Board is shown
+  useEffect(() => {
+    document.addEventListener("keydown", onPanelKeyDown);
+    return () => document.removeEventListener("keydown", onPanelKeyDown);
+  }, []);
+
+  // A pull request link in Today opens in the panel's Today entry; show it there.
+  const onLinksAction = useEffectEvent(() => {
+    const state =
+      linksRef === null
+        ? null
+        : selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, linksRef);
+    if (state === null || state.activeSurfaceId === null) return;
+    openBoardPanel(BOARD_LINKS_SELECTION);
+  });
+  const linksKey = linksRef === null ? null : scopedThreadKey(linksRef);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to the right panel store so a pull request opened from Today shows in the Board's panel
+  useEffect(() => {
+    if (linksKey === null) return;
+    return useRightPanelStore.subscribe((state, previous) => {
+      if (
+        state.userActionRevisionByThreadKey[linksKey] !==
+        previous.userActionRevisionByThreadKey[linksKey]
+      ) {
+        onLinksAction();
+      }
+    });
+  }, [linksKey]);
 
   const rowProps = {
     showEnvironment,
     environmentLabels,
-    selectedKey: selectedThreadKey,
+    selectedKey: panelOpen ? selectedThreadKey : null,
     onOpen: openThread,
   };
+  const activeItemKey = panelOpen ? selectedItemKey : null;
+  const itemRowProps = (row: BoardItemRow) => ({
+    row,
+    color: deskColors.get(row.desk.slug),
+    showDesk: filterDesk === null,
+    selected: row.key === activeItemKey,
+    onOpen: () => openItem(row.key),
+    onOpenDesk: deskOpener(row),
+  });
 
   const needsMeSection = (
     <BoardSection
@@ -186,23 +345,10 @@ export function BoardPage() {
         />
       ))}
       {items.ranked.map((row) => (
-        <BoardItemListRow
-          key={row.key}
-          row={row}
-          color={deskColors.get(row.desk.slug)}
-          showDesk={filterDesk === null}
-          selected={row.key === selectedItemKey}
-          onOpen={() => openItem(row.key)}
-        />
+        <BoardItemListRow key={row.key} {...itemRowProps(row)} />
       ))}
       {items.later.length === 0 ? null : (
-        <LaterItems
-          rows={items.later}
-          deskColors={deskColors}
-          showDesk={filterDesk === null}
-          selectedKey={selectedItemKey}
-          onOpen={openItem}
-        />
+        <LaterItems rows={items.later} selectedKey={activeItemKey} rowProps={itemRowProps} />
       )}
     </BoardSection>
   );
@@ -239,7 +385,8 @@ export function BoardPage() {
             color={deskColors.get(row.desk.slug)}
             showDesk={filterDesk === null}
             time={formatShortTimestamp(row.event.t, timestampFormat)}
-            environmentId={markdownEnvironmentId}
+            environmentId={primaryConnectedId}
+            panelRef={linksRef}
           />
         ))}
       </BoardSection>
@@ -259,12 +406,10 @@ export function BoardPage() {
       </BoardSection>
     );
 
-  const panelOpen = selectedRef !== null || selectedItemKey !== null;
-
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none">
       <div className="relative flex min-h-0 flex-1">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
+        <div className="@container/board flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
           <WorkspacePageHeader
             electron={isElectron}
             reserveNativeControls={!panelOpen}
@@ -279,14 +424,14 @@ export function BoardPage() {
               <ArrowLeftIcon />
               <T context="leaves the board for the last open thread">Back</T>
             </Button>
-            <WorkspaceBreadcrumb ariaLabel={gt("Board breadcrumb")}>
+            <WorkspaceBreadcrumb ariaLabel={gt("Board breadcrumb")} className="shrink-0">
               <WorkspaceBreadcrumbItem current>
                 <h1 className="truncate">
                   <T context="page title, board of threads that need the user">Board</T>
                 </h1>
               </WorkspaceBreadcrumbItem>
             </WorkspaceBreadcrumb>
-            <Badge variant="secondary" size="sm" className="hidden shrink-0 lg:inline-flex">
+            <Badge variant="secondary" size="sm" className="hidden shrink-0 @4xl/board:inline-flex">
               {connectedIds.length === 1
                 ? gt("1 environment")
                 : gt("{count} environments", { count: connectedIds.length })}
@@ -296,39 +441,62 @@ export function BoardPage() {
               onConnect={() => void navigate({ to: "/settings/labs" })}
             />
             <div className="min-w-0 flex-1" />
-            <div className="flex items-center gap-2 [-webkit-app-region:no-drag]">
-              <ToggleGroup
-                aria-label={gt("Board view")}
-                value={[view]}
-                onValueChange={(next) => {
-                  const value = next[0] as BoardView | undefined;
-                  if (value === undefined) return;
-                  updateSearch({ boardView: value === "all" ? undefined : value });
-                }}
-              >
-                <Toggle value="all">
-                  <T context="board filter">All</T>
-                </Toggle>
-                <Toggle value="needs-me">
-                  <T>Needs me</T>
-                  <CountBadge count={needsMeCount} warn={model.needsMe.length > 0} />
-                </Toggle>
-                <Toggle value="running">
-                  <T context="board filter">Running</T>
-                  <CountBadge count={model.running.length} />
-                </Toggle>
-                {board.source === null ? null : (
-                  <Toggle value="today">
-                    <T context="board filter, what the bots did today">Today</T>
-                    <CountBadge count={today.length} />
+            <div
+              className="flex min-w-0 items-center gap-2 [-webkit-app-region:no-drag]"
+              data-workspace-titlebar-controls
+            >
+              {/* The views scroll when the panel narrows the header; the panel toggle stays put. */}
+              <div className="min-w-0 overflow-x-auto [scrollbar-width:none]">
+                <ToggleGroup
+                  aria-label={gt("Board view")}
+                  value={[view]}
+                  onValueChange={(next) => {
+                    const value = next[0] as BoardView | undefined;
+                    if (value === undefined) return;
+                    updateSearch({ boardView: value === "all" ? undefined : value });
+                  }}
+                >
+                  <Toggle value="all">
+                    <T context="board filter">All</T>
                   </Toggle>
-                )}
-                {webUrl === null ? null : (
-                  <Toggle value="web">
-                    <T context="board filter, the bot board's own web page">Web</T>
+                  <Toggle value="needs-me">
+                    <T>Needs me</T>
+                    <CountBadge count={needsMeCount} warn={model.needsMe.length > 0} />
                   </Toggle>
-                )}
-              </ToggleGroup>
+                  <Toggle value="running">
+                    <T context="board filter">Running</T>
+                    <CountBadge count={model.running.length} />
+                  </Toggle>
+                  {board.source === null ? null : (
+                    <Toggle value="today">
+                      <T context="board filter, what the bots did today">Today</T>
+                      <CountBadge count={today.length} />
+                    </Toggle>
+                  )}
+                  {webUrl === null ? null : (
+                    <Toggle value="web">
+                      <T context="board filter, the bot board's own web page">Web</T>
+                    </Toggle>
+                  )}
+                </ToggleGroup>
+              </div>
+              <PanelLayoutControls
+                showTerminalControl={false}
+                showThreadPanelControl={false}
+                terminalAvailable={false}
+                terminalOpen={false}
+                terminalShortcutLabel={null}
+                threadPanelOpen={false}
+                threadPanelPresentation="inline"
+                threadPanelShortcutLabel={null}
+                onToggleThreadPanel={() => undefined}
+                rightPanelAvailable={panelAvailable}
+                rightPanelOpen={panelOpen}
+                rightPanelShortcutLabel={shortcutLabelForCommand(keybindings, "rightPanel.toggle")}
+                rightPanelUnavailableLabel={gt("Select an item or thread first")}
+                onToggleTerminal={() => undefined}
+                onToggleRightPanel={togglePanel}
+              />
             </div>
           </WorkspacePageHeader>
 
@@ -377,33 +545,108 @@ export function BoardPage() {
           )}
         </div>
 
-        {selectedRef !== null ? (
-          <BoardThreadPanel
-            key={selectedThreadKey}
-            threadRef={selectedRef}
-            onClose={closePanel}
-            onOpenFull={() => openFullThread(selectedRef)}
-          />
-        ) : selectedItemKey !== null ? (
-          <BoardItemDetailPanel
-            itemKey={selectedItemKey}
-            row={selectedItem}
-            data={data}
-            deskColor={selectedItem ? deskColors.get(selectedItem.desk.slug) : undefined}
-            deskThreadRef={selectedDeskThreadRef}
-            pane={search.boardPane ?? "details"}
-            markdownEnvironmentId={markdownEnvironmentId}
-            onPaneChange={(pane: BoardItemPane) =>
-              updateSearch({ boardPane: pane === "chat" ? "chat" : undefined })
+        {presence.present && selection !== null ? (
+          <BoardRightPanel
+            model={panelModel}
+            open={panelOpen}
+            labels={{
+              [BOARD_DETAILS_TAB]: {
+                title: gt("Details", { $context: "board item panel tab" }),
+                ...(selectedItem === null
+                  ? {}
+                  : { tooltip: plainBoardText(selectedItem.item.ask) }),
+                icon: <FileTextIcon />,
+              },
+              [BOARD_CHAT_TAB]: {
+                title: gt("Bot chat", { $context: "board item panel tab, the desk bot's thread" }),
+                ...(selectedItem === null
+                  ? {}
+                  : { tooltip: gt("{desk}'s thread", { desk: selectedItem.desk.name }) }),
+                icon: <MessageSquareIcon />,
+              },
+              [BOARD_THREAD_TAB]: {
+                title: selectedThreadTitle(selection, threads) ?? gt("Thread"),
+                icon: <MessageSquareIcon />,
+              },
+            }}
+            actions={
+              <>
+                {selection.kind === "thread" ||
+                (panelModel.activeTabId === BOARD_CHAT_TAB && selectedDeskThread !== null) ? (
+                  <IconAction
+                    label={gt("Open full thread")}
+                    onClick={() => {
+                      if (selection.kind === "thread") openFullThread(selection);
+                      else if (selectedDeskThread !== null) openFullThread(selectedDeskThread);
+                    }}
+                  >
+                    <ArrowUpRightIcon />
+                  </IconAction>
+                ) : null}
+                <IconAction label={gt("Close panel")} onClick={closeBoardPanel}>
+                  <XIcon />
+                </IconAction>
+              </>
             }
-            onSelectItem={openItem}
-            onOpenThread={openFullThread}
-            onClose={closePanel}
+            renderTab={(tabId) => {
+              if (tabId === BOARD_THREAD_TAB && selection.kind === "thread" && hostRef !== null) {
+                return (
+                  <BoardSideThread
+                    hostRef={hostRef}
+                    threadId={selection.threadId}
+                    onClose={closeBoardPanel}
+                    onOpenFull={() => openFullThread(selection)}
+                  />
+                );
+              }
+              if (tabId === BOARD_CHAT_TAB && selectedDeskThread !== null && hostRef !== null) {
+                return (
+                  <BoardSideThread
+                    hostRef={hostRef}
+                    threadId={selectedDeskThread.threadId}
+                    onClose={() => panelModel.activate(BOARD_DETAILS_TAB)}
+                    onOpenFull={() => openFullThread(selectedDeskThread)}
+                  />
+                );
+              }
+              if (tabId === BOARD_DETAILS_TAB && selectedItemKey !== null) {
+                return (
+                  <BoardItemDetailPanel
+                    itemKey={selectedItemKey}
+                    row={selectedItem}
+                    data={data}
+                    deskColor={selectedItem ? deskColors.get(selectedItem.desk.slug) : undefined}
+                    onOpenDesk={
+                      selectedDeskThread === null ? null : () => openFullThread(selectedDeskThread)
+                    }
+                    markdownEnvironmentId={hostRef?.environmentId ?? null}
+                    panelRef={hostRef}
+                    onSelectItem={openItem}
+                  />
+                );
+              }
+              return null;
+            }}
           />
         ) : null}
       </div>
     </SidebarInset>
   );
+}
+
+const BOARD_LINKS_SELECTION: BoardPanelSelection = { kind: "links" };
+
+function selectedThreadTitle(
+  selection: BoardPanelSelection,
+  threads: ReadonlyArray<BoardThreadInput>,
+): string | null {
+  if (selection.kind !== "thread") return null;
+  const thread = threads.find(
+    (candidate) =>
+      candidate.environmentId === selection.environmentId && candidate.id === selection.threadId,
+  );
+  const title = thread?.title.trim() ?? "";
+  return title === "" ? null : title;
 }
 
 function CountBadge({ count, warn = false }: { count: number; warn?: boolean }) {
@@ -424,7 +667,7 @@ function BoardSyncStatus(props: { board: BoardDataHandle; onConnect: () => void 
       <Button
         size="xs"
         variant="outline"
-        className="hidden shrink-0 sm:inline-flex [-webkit-app-region:no-drag]"
+        className="hidden shrink-0 @xl/board:inline-flex [-webkit-app-region:no-drag]"
         onClick={props.onConnect}
       >
         <PlugIcon />
@@ -442,16 +685,13 @@ function BoardSyncStatus(props: { board: BoardDataHandle; onConnect: () => void 
   ]
     .filter((line): line is string => line !== null && line !== "")
     .join("\n");
+  // Hidden when the panel leaves the header too narrow for it, as the view toggles matter more.
   return (
-    <div className="flex shrink-0 items-center gap-0.5 [-webkit-app-region:no-drag]">
+    <div className="hidden shrink-0 items-center gap-0.5 @2xl/board:flex [-webkit-app-region:no-drag]">
       <Tooltip>
         <TooltipTrigger
           render={
-            <Badge
-              size="sm"
-              variant={failing ? "warning" : "secondary"}
-              className="hidden max-w-56 sm:inline-flex"
-            />
+            <Badge size="sm" variant={failing ? "warning" : "secondary"} className="max-w-56" />
           }
         >
           <span className="truncate">
@@ -559,51 +799,78 @@ function BoardThreadRow(props: {
   );
 }
 
-function BoardItemListRow(props: {
+interface BoardItemListRowProps {
   row: BoardItemRow;
   color: string | undefined;
   showDesk: boolean;
   selected: boolean;
   onOpen: () => void;
-}) {
+  /** Opens the desk's bot thread full screen; null when the desk has no thread here. */
+  onOpenDesk: (() => void) | null;
+}
+
+function BoardItemListRow(props: BoardItemListRowProps) {
+  const gt = useGT();
   const { item, desk } = props.row;
+  const { onOpenDesk } = props;
   return (
-    <button
-      type="button"
-      aria-current={props.selected || undefined}
-      className={cn(ROW_CLASS, props.selected && "bg-accent", item.banner !== null && "opacity-75")}
-      onClick={props.onOpen}
+    <div
+      className={cn(
+        "group/row flex min-w-0 items-center rounded-md hover:bg-accent",
+        props.selected && "bg-accent",
+      )}
     >
-      <span className="flex size-4 shrink-0 items-center justify-center">
-        <span
-          aria-hidden
-          className="size-2 rounded-full"
-          style={{ background: props.color } as CSSProperties}
-        />
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate font-medium text-sm">{plainBoardText(item.ask)}</span>
-        <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground text-xs">
-          {props.showDesk ? <DeskBadge desk={desk} color={props.color} /> : null}
-          <ItemTypeBadge type={item.type} />
-          <span className="truncate font-mono">{item.id}</span>
+      <button
+        type="button"
+        aria-current={props.selected || undefined}
+        className={cn(
+          ROW_CLASS,
+          "hover:bg-transparent",
+          item.banner !== null && "opacity-75",
+          onOpenDesk !== null && "pr-1",
+        )}
+        onClick={(event: MouseEvent) => {
+          if (onOpenDesk !== null && opensFullThread(event)) onOpenDesk();
+          else props.onOpen();
+        }}
+        onDoubleClick={onOpenDesk ?? undefined}
+      >
+        <span className="flex size-4 shrink-0 items-center justify-center">
+          <span
+            aria-hidden
+            className="size-2 rounded-full"
+            style={{ background: props.color } as CSSProperties}
+          />
         </span>
-      </span>
-      {item.banner === null ? null : <NotReadyBadge />}
-      <WhenBadge when={item.when} />
-      <span className="w-14 shrink-0 text-right text-muted-foreground text-xs tabular-nums">
-        {item.checked === null ? null : <RelativeTime timestamp={item.checked} />}
-      </span>
-    </button>
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="truncate font-medium text-sm">{plainBoardText(item.ask)}</span>
+          <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground text-xs">
+            {props.showDesk ? <DeskBadge desk={desk} color={props.color} /> : null}
+            <ItemTypeBadge type={item.type} />
+            <span className="truncate font-mono">{item.id}</span>
+          </span>
+        </span>
+        {item.banner === null ? null : <NotReadyBadge />}
+        <WhenBadge when={item.when} />
+        <span className="w-14 shrink-0 text-right text-muted-foreground text-xs tabular-nums">
+          {item.checked === null ? null : <RelativeTime timestamp={item.checked} />}
+        </span>
+      </button>
+      {onOpenDesk === null ? null : (
+        <span className="mr-2 flex shrink-0 opacity-0 focus-within:opacity-100 group-hover/row:opacity-100">
+          <IconAction label={gt("Open in {desk}", { desk: desk.name })} onClick={onOpenDesk}>
+            <ArrowUpRightIcon />
+          </IconAction>
+        </span>
+      )}
+    </div>
   );
 }
 
 function LaterItems(props: {
   rows: ReadonlyArray<BoardItemRow>;
-  deskColors: ReadonlyMap<string, string>;
-  showDesk: boolean;
   selectedKey: string | null;
-  onOpen: (key: string) => void;
+  rowProps: (row: BoardItemRow) => BoardItemListRowProps;
 }) {
   const gt = useGT();
   const holdsSelection = props.rows.some((row) => row.key === props.selectedKey);
@@ -625,16 +892,7 @@ function LaterItems(props: {
         <span>{gt("{count} later", { count: props.rows.length })}</span>
       </button>
       {expanded
-        ? props.rows.map((row) => (
-            <BoardItemListRow
-              key={row.key}
-              row={row}
-              color={props.deskColors.get(row.desk.slug)}
-              showDesk={props.showDesk}
-              selected={row.key === props.selectedKey}
-              onOpen={() => props.onOpen(row.key)}
-            />
-          ))
+        ? props.rows.map((row) => <BoardItemListRow key={row.key} {...props.rowProps(row)} />)
         : null}
     </>
   );
@@ -646,6 +904,8 @@ function TodayRow(props: {
   showDesk: boolean;
   time: string;
   environmentId: EnvironmentId | null;
+  /** The Board panel's entry that pull request links open in. */
+  panelRef: ScopedThreadRef | null;
 }) {
   const { row } = props;
   return (
@@ -660,6 +920,7 @@ function TodayRow(props: {
           text={rewriteBoardThreadLinks(row.event.text)}
           cwd={undefined}
           environmentId={props.environmentId ?? undefined}
+          pullRequestPanelRef={props.panelRef ?? undefined}
         />
       </div>
     </div>

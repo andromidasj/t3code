@@ -23,8 +23,9 @@ keeps your sign-in, settings and threads.
 4. Per-Mac settings the fork adds:
    - Settings → Keybindings: bind `chat.citeSelection` (e.g. ⌘L).
    - Settings → Appearance → Thread details: untick "Open in new threads".
-   - Settings → Labs → Customizations: the Board view, where this Mac's bot board lives (saved on
-     this Mac only) and whether the app opens on the Board. The bot board is bot-desk `board.py`'s
+   - Settings → Labs → Customizations: which pages sit at the top of the sidebar (Board, Pull
+     requests, Issues) and in what order, where this Mac's bot board lives (saved on this Mac
+     only) and whether the app opens on the Board. The bot board is bot-desk `board.py`'s
      output: its web address (e.g. `https://host:8447/`) or its folder on this Mac (e.g.
      `~/dev/bot/.board`). The desktop app reads `data.json` there, or the data `index.html` embeds.
    - Thread details limits for CLIProxyAPI threads (official since 0.1.12) come from Settings →
@@ -58,3 +59,4 @@ reinstalls the current release.
 | PR links open via any environment with the repo   | none (fork-only)           | upstream resolves links across envs    |
 | Board view (`/board`, ⌥⇧⌘B) and per-Mac settings  | none (fork-only)           | upstream ships a cross-thread board    |
 | Board shows bot-desk items, Today and details     | none (fork-only)           | the Board patch is dropped             |
+| Board right panel, sidebar pages, "Open in" desk  | none (fork-only)           | the Board patch is dropped             |

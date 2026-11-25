@@ -123,21 +123,14 @@ export function countNeedsMe(threads: ReadonlyArray<BoardThreadInput>): number {
 
 export type BoardView = "all" | "needs-me" | "running" | "today" | "web";
 
-/** Which half of a Board item's panel shows: its details, or the desk's bot thread. */
-export type BoardItemPane = "details" | "chat";
-
 /**
- * The board's URL state. Keys carry a `board` prefix because the router merges every route's
- * search into one type for `navigate`. A selected Board item and a selected thread exclude
- * each other.
+ * The board's URL state: its view and desk filter. Keys carry a `board` prefix because the router
+ * merges every route's search into one type for `navigate`. The right panel's selection is
+ * session state (boardPanelStore), so opening and closing it adds no history entries.
  */
 export interface BoardSearch {
   readonly boardView?: BoardView | undefined;
   readonly boardDesk?: string | undefined;
-  readonly boardItem?: string | undefined;
-  readonly boardPane?: BoardItemPane | undefined;
-  readonly boardEnvironmentId?: string | undefined;
-  readonly boardThreadId?: string | undefined;
 }
 
 const BOARD_VIEWS: ReadonlySet<string> = new Set<BoardView>([
@@ -157,18 +150,9 @@ export function boardSearchFromUrl(search: Record<string, unknown>): BoardSearch
       ? (search.boardView as BoardView)
       : undefined;
   const desk = boundedId(search.boardDesk);
-  const item = boundedId(search.boardItem);
-  const environmentId = boundedId(search.boardEnvironmentId);
-  const threadId = boundedId(search.boardThreadId);
-  const thread = environmentId !== undefined && threadId !== undefined;
   return {
     ...(view === undefined || view === "all" ? {} : { boardView: view }),
     ...(desk === undefined ? {} : { boardDesk: desk }),
-    ...(item !== undefined && !thread ? { boardItem: item } : {}),
-    ...(item !== undefined && !thread && search.boardPane === "chat"
-      ? { boardPane: "chat" as const }
-      : {}),
-    ...(thread ? { boardEnvironmentId: environmentId, boardThreadId: threadId } : {}),
   };
 }
 

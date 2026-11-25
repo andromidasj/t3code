@@ -1,11 +1,20 @@
 import { T, useGT } from "gt-react";
+import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
 
 import { SettingsRow, SettingsSection } from "~/components/settings/settingsLayout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Switch } from "~/components/ui/switch";
 
-import { normalizeBoardSource, updateForkSettings, useForkSettings } from "./forkSettings";
+import {
+  moveSidebarPage,
+  normalizeBoardSource,
+  setSidebarPageVisible,
+  updateForkSettings,
+  useForkSettings,
+  type SidebarPage,
+} from "./forkSettings";
+import { SIDEBAR_PAGE_ICONS, useSidebarPageLabels } from "./sidebarPages";
 
 /** Settings this fork adds, saved on this Mac only. Shown under Settings, Labs. */
 export function ForkSettingsSection() {
@@ -17,18 +26,13 @@ export function ForkSettingsSection() {
     <SettingsSection id="fork-customizations" title={gt("Customizations")}>
       <SettingsRow
         devicePreference
-        title={gt("Board view")}
+        title={gt("Sidebar pages")}
         description={gt(
-          "Show a Board row at the top of the sidebar with what needs you and what is running.",
+          "Which pages sit at the top of the sidebar, and in what order. Pull requests and Issues show only when a connected server supports them.",
         )}
-        control={
-          <Switch
-            checked={settings.boardEnabled}
-            onCheckedChange={(checked) => updateForkSettings({ boardEnabled: Boolean(checked) })}
-            aria-label={gt("Board view")}
-          />
-        }
-      />
+      >
+        <SidebarPagesControl pages={settings.sidebarPages} />
+      </SettingsRow>
       <SettingsRow
         devicePreference
         title={gt("Bot board")}
@@ -81,5 +85,56 @@ export function ForkSettingsSection() {
         }
       />
     </SettingsSection>
+  );
+}
+
+function SidebarPagesControl(props: { pages: ReadonlyArray<SidebarPage> }) {
+  const gt = useGT();
+  const labels = useSidebarPageLabels();
+  const { pages } = props;
+  return (
+    <ol className="mt-1 mb-2 flex flex-col gap-0.5" aria-label={gt("Sidebar pages")}>
+      {pages.map((page, index) => {
+        const Icon = SIDEBAR_PAGE_ICONS[page.id];
+        const label = labels[page.id];
+        return (
+          <li key={page.id} className="flex items-center gap-2 rounded-md px-1 py-1">
+            <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span className="min-w-0 flex-1 truncate text-sm">{label}</span>
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              disabled={index === 0}
+              aria-label={gt("Move {page} up", { page: label })}
+              onClick={() =>
+                updateForkSettings({ sidebarPages: moveSidebarPage(pages, page.id, -1) })
+              }
+            >
+              <ArrowUpIcon />
+            </Button>
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              disabled={index === pages.length - 1}
+              aria-label={gt("Move {page} down", { page: label })}
+              onClick={() =>
+                updateForkSettings({ sidebarPages: moveSidebarPage(pages, page.id, 1) })
+              }
+            >
+              <ArrowDownIcon />
+            </Button>
+            <Switch
+              checked={page.visible}
+              onCheckedChange={(checked) =>
+                updateForkSettings({
+                  sidebarPages: setSidebarPageVisible(pages, page.id, Boolean(checked)),
+                })
+              }
+              aria-label={gt("Show {page} in the sidebar", { page: label })}
+            />
+          </li>
+        );
+      })}
+    </ol>
   );
 }

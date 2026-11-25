@@ -35,10 +35,15 @@ import {
 import {
   DEFAULT_FORK_SETTINGS,
   FORK_SETTINGS_STORAGE_KEY,
+  isSidebarPageVisible,
+  moveSidebarPage,
   normalizeBoardSource,
   normalizeBoardUrl,
+  normalizeSidebarPages,
   readForkSettings,
+  setSidebarPageVisible,
   updateForkSettings,
+  type SidebarPage,
 } from "./forkSettings";
 
 const ENV = EnvironmentId.make("env-1");
@@ -221,35 +226,18 @@ describe("boardSearchFromUrl", () => {
     expect(boardSearchFromUrl({ boardView: "nope" })).toEqual({});
   });
 
-  it("keeps a selected thread only with both ids", () => {
-    expect(boardSearchFromUrl({ boardEnvironmentId: "env", boardThreadId: "t" })).toEqual({
-      boardEnvironmentId: "env",
-      boardThreadId: "t",
-    });
-    expect(boardSearchFromUrl({ boardThreadId: "t" })).toEqual({});
-    expect(boardSearchFromUrl({ boardEnvironmentId: "env", boardThreadId: 3 })).toEqual({});
-  });
-
-  it("keeps a Board item, its pane and the desk filter, but not an item and a thread at once", () => {
+  it("keeps the desk filter and drops the old panel selection keys", () => {
     expect(
       boardSearchFromUrl({
         boardView: "today",
         boardDesk: "chief",
         boardItem: "chief/cliproxyUpdate",
         boardPane: "chat",
+        boardEnvironmentId: "env",
+        boardThreadId: "t",
       }),
-    ).toEqual({
-      boardView: "today",
-      boardDesk: "chief",
-      boardItem: "chief/cliproxyUpdate",
-      boardPane: "chat",
-    });
-    expect(boardSearchFromUrl({ boardItem: "chief/x", boardPane: "other" })).toEqual({
-      boardItem: "chief/x",
-    });
-    expect(
-      boardSearchFromUrl({ boardItem: "chief/x", boardEnvironmentId: "env", boardThreadId: "t" }),
-    ).toEqual({ boardEnvironmentId: "env", boardThreadId: "t" });
+    ).toEqual({ boardView: "today", boardDesk: "chief" });
+    expect(boardSearchFromUrl({ boardDesk: "" })).toEqual({});
   });
 });
 
@@ -330,15 +318,100 @@ describe("fork settings storage", () => {
     const storage = memoryStorage();
     updateForkSettings({ boardUrl: "https://board.example/" }, storage);
     updateForkSettings({ openBoardOnLaunch: true }, storage);
-    expect(readForkSettings(storage)).toEqual({
+    const expected = {
       boardEnabled: true,
       boardUrl: "https://board.example/",
       openBoardOnLaunch: true,
+      sidebarPages: DEFAULT_FORK_SETTINGS.sidebarPages,
+    };
+    expect(readForkSettings(storage)).toEqual(expected);
+    expect(JSON.parse(storage.values.get(FORK_SETTINGS_STORAGE_KEY) ?? "null")).toEqual(expected);
+  });
+});
+
+describe("sidebar pages", () => {
+  const ids = (pages: ReadonlyArray<SidebarPage>) => pages.map((page) => page.id);
+  const visible = (pages: ReadonlyArray<SidebarPage>) =>
+    pages.filter((page) => page.visible).map((page) => page.id);
+
+  it("defaults to Board, Pull requests and Issues, all shown", () => {
+    expect(DEFAULT_FORK_SETTINGS.sidebarPages).toEqual([
+      { id: "board", visible: true },
+      { id: "pull-requests", visible: true },
+      { id: "issues", visible: true },
+    ]);
+  });
+
+  it("hides the Board for settings saved with boardEnabled off before the list existed", () => {
+    const storage = memoryStorage({
+      [FORK_SETTINGS_STORAGE_KEY]: JSON.stringify({ boardEnabled: false, boardUrl: "" }),
     });
-    expect(JSON.parse(storage.values.get(FORK_SETTINGS_STORAGE_KEY) ?? "null")).toEqual({
+    const settings = readForkSettings(storage);
+    expect(settings.boardEnabled).toBe(false);
+    expect(ids(settings.sidebarPages)).toEqual(["board", "pull-requests", "issues"]);
+    expect(visible(settings.sidebarPages)).toEqual(["pull-requests", "issues"]);
+  });
+
+  it("keeps the saved order, drops unknown and repeated ids, and appends missing pages", () => {
+    const pages = normalizeSidebarPages(
+      [
+        { id: "issues", visible: false },
+        { id: "nope", visible: true },
+        { id: "issues", visible: true },
+        "board",
+        { id: "board", visible: "yes" },
+      ],
+      false,
+    );
+    expect(pages).toEqual([
+      { id: "issues", visible: false },
+      { id: "board", visible: true },
+      { id: "pull-requests", visible: true },
+    ]);
+  });
+
+  it("lets a saved Board entry win over a stale boardEnabled", () => {
+    const storage = memoryStorage({
+      [FORK_SETTINGS_STORAGE_KEY]: JSON.stringify({
+        boardEnabled: true,
+        sidebarPages: [{ id: "board", visible: false }],
+      }),
+    });
+    expect(readForkSettings(storage).boardEnabled).toBe(false);
+  });
+
+  it("toggles a page's visibility", () => {
+    const pages = setSidebarPageVisible(DEFAULT_FORK_SETTINGS.sidebarPages, "issues", false);
+    expect(visible(pages)).toEqual(["board", "pull-requests"]);
+    expect(isSidebarPageVisible(pages, "issues")).toBe(false);
+    expect(visible(setSidebarPageVisible(pages, "issues", true))).toEqual(ids(pages));
+  });
+
+  it("moves a page up or down, and not past either end", () => {
+    const pages = DEFAULT_FORK_SETTINGS.sidebarPages;
+    expect(ids(moveSidebarPage(pages, "issues", -1))).toEqual(["board", "issues", "pull-requests"]);
+    expect(ids(moveSidebarPage(pages, "board", 1))).toEqual(["pull-requests", "board", "issues"]);
+    expect(moveSidebarPage(pages, "board", -1)).toBe(pages);
+    expect(moveSidebarPage(pages, "issues", 1)).toBe(pages);
+  });
+
+  it("keeps boardEnabled and the Board entry in step whichever one changes", () => {
+    const storage = memoryStorage();
+    expect(updateForkSettings({ boardEnabled: false }, storage).sidebarPages[0]).toEqual({
+      id: "board",
+      visible: false,
+    });
+    const reordered = moveSidebarPage(readForkSettings(storage).sidebarPages, "board", 1);
+    const shown = setSidebarPageVisible(reordered, "board", true);
+    const next = updateForkSettings({ sidebarPages: shown }, storage);
+    expect(next.boardEnabled).toBe(true);
+    expect(readForkSettings(storage)).toMatchObject({
       boardEnabled: true,
-      boardUrl: "https://board.example/",
-      openBoardOnLaunch: true,
+      sidebarPages: [
+        { id: "pull-requests", visible: true },
+        { id: "board", visible: true },
+        { id: "issues", visible: true },
+      ],
     });
   });
 });

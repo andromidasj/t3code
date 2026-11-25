@@ -260,6 +260,15 @@ import {
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { SidebarPagesNav } from "~/fork/SidebarPagesNav";
+import { SidebarBotDrawerHeader, SidebarFilterBar } from "~/fork/SidebarFilterBar";
+import {
+  sidebarBotRows,
+  sidebarDrawerCount,
+  sidebarFolderThreads,
+  sidebarSettledCount,
+  withBotDrawerMarker,
+} from "~/fork/sidebarHierarchy";
+import { useForkSidebarHierarchy } from "~/fork/useSidebarHierarchy";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { TooltipScrollDismissArea } from "./ui/tooltip";
 import {
@@ -497,7 +506,7 @@ function useSidebarThreads(input: {
   const settledVisibleCount =
     settledTail.scopeKey === projectScopeKey ? settledTail.count : SETTLED_TAIL_INITIAL_COUNT;
 
-  const partition = partitionSidebarThreads({
+  const upstreamPartition = partitionSidebarThreads({
     threads,
     scopedProjectKeys,
     delegatedUnderParent,
@@ -508,6 +517,7 @@ function useSidebarThreads(input: {
     sortActiveBySend: folderGroups !== null,
     clockKey: `${nowMinute}:${snoozeWakeClock}:${inboxReturnsVersion}`,
   });
+  const partition = useForkSidebarHierarchy(upstreamPartition, routeRowThreadKey);
 
   const { pinnedThreads, activeThreads, workingThreads, snoozedThreads, settledThreads } =
     partition;
@@ -519,8 +529,11 @@ function useSidebarThreads(input: {
   });
   const listedSettledThreads = settledThreads.filter(olderSettledShelf.isListed);
   useOlderSettledShelfGrowth(olderSettledShelf, listedSettledThreads);
-  const settledCount =
-    settledThreads.length + olderSettledShelf.unloadedCount(partition.visibleThreads);
+  const settledCount = sidebarSettledCount(
+    partition.forkHierarchy,
+    settledThreads.length,
+    settledThreads.length + olderSettledShelf.unloadedCount(partition.visibleThreads),
+  );
   const visibleSettledThreads = (() => {
     const visible = listedSettledThreads.slice(0, settledVisibleCount);
     if (
@@ -546,7 +559,11 @@ function useSidebarThreads(input: {
   const projectFolders =
     folderGroups === null
       ? null
-      : groupSidebarThreadsByProject(folderGroups, activeThreads, keepEmpty).map((folder) => {
+      : groupSidebarThreadsByProject(
+          folderGroups,
+          sidebarFolderThreads(activeThreads, partition.forkHierarchy),
+          keepEmpty,
+        ).map((folder) => {
           const collapsed = !resolveProjectExpanded(
             projectExpandedById,
             sidebarFolderExpansionKeys(folder.group),
@@ -568,6 +585,7 @@ function useSidebarThreads(input: {
     ...(projectFolders === null
       ? activeThreads
       : projectFolders.flatMap((folder) => folder.threads)),
+    ...(projectFolders === null ? [] : sidebarBotRows(activeThreads, partition.forkHierarchy)),
     ...visibleWorkingThreads,
     ...visibleSnoozedThreads,
     ...renderedSettledThreads,
@@ -592,6 +610,7 @@ function useSidebarThreads(input: {
       ...workingThreads,
       ...snoozedThreads,
       ...settledThreads,
+      ...partition.forkHierarchy.hiddenThreads,
     ],
     settledVisibleCount,
     settledCount,
@@ -1369,6 +1388,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     activeKeys,
     pinnedKeysById,
     activeKeysById,
+    forkHierarchy,
   } = useSidebarThreads({
     projectScopeKey,
     scopedProjectKeys,
@@ -2009,7 +2029,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         activeThreads.length +
         workingThreads.length +
         snoozedThreads.length +
-        settledCount ===
+        settledCount +
+        sidebarDrawerCount(forkHierarchy) ===
         0
     ) {
       return [];
@@ -2033,7 +2054,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     const settledRows = rowsOf(renderedSettledThreads, "settled");
     items.push({ kind: "marker", marker: "settled-placeholder" });
     items.push(...settledRows);
-    return items;
+    return withBotDrawerMarker(items, forkHierarchy);
   })();
   // Preserve the list while streamed updates leave order unchanged to retain row memoization.
   const sidebarListItemsKey = sidebarListItemsFresh
@@ -3342,6 +3363,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               onClearSearch={clearThreadSearch}
             />
             <SidebarPagesNav />
+            <SidebarFilterBar
+              needsMeCount={forkHierarchy.needsMeCount}
+              hidden={isSearchingThreads}
+              projectScopeKeys={projectScopeKeys}
+              onProjectScopeChange={setProjectScopeKeys}
+            />
           </SidebarGroup>
         }
       >
@@ -3628,7 +3655,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                     for (const item of sidebarListItems) {
                       if (item.kind === "thread") {
                         // Folders draw active rows in their own place below.
-                        if (projectFolders !== null && item.section === "active") continue;
+                        if (
+                          projectFolders !== null &&
+                          item.section === "active" &&
+                          !forkHierarchy.botRowKeys.has(item.key)
+                        )
+                          continue;
                         items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
                         continue;
                       }
@@ -3658,6 +3690,17 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         continue;
                       }
                       switch (item.marker) {
+                        case "bot-header":
+                          if (forkHierarchy.drawer !== null) {
+                            items.push(
+                              <SidebarBotDrawerHeader
+                                key="bot-header"
+                                drawer={forkHierarchy.drawer}
+                                onToggle={forkHierarchy.toggleBotDrawer}
+                              />,
+                            );
+                          }
+                          break;
                         case "pinned-header":
                           items.push(
                             <SidebarDragBoundary

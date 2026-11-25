@@ -8,6 +8,7 @@ import {
   type SidebarListMarker,
   type SidebarSection,
 } from "./Sidebar.logic";
+import { splitBotDrawerRows } from "~/fork/sidebarHierarchy";
 
 const stationary = { x: 0, y: 0, scaleX: 1, scaleY: 1 };
 const hidden = { ...stationary, scaleY: 0 };
@@ -175,7 +176,13 @@ export function createSidebarSortingStrategy(input: {
     marker("pinned-header");
     projected.push(...groups.pinned);
     marker("pinned-divider");
+    const bot = splitBotDrawerRows(items, groups.active);
+    if (bot !== null) groups.active = bot.human;
     section("active");
+    if (bot !== null) {
+      marker("bot-header");
+      projected.push(...bot.bot);
+    }
     if (items.some((item) => item.kind === "marker" && item.marker === "working-header")) {
       marker("working-header");
       projected.push(...groups.working);

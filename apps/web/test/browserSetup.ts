@@ -21,8 +21,11 @@ declare module "vite-plus/test/browser" {
 // running and can move the mouse after its own afterEach.
 beforeEach(async () => {
   await commands.resetPointer();
-  // Fork: upstream tests expect upstream timelines; fork tests turn bot-update folding on.
-  localStorage.setItem(FORK_SETTINGS_STORAGE_KEY, JSON.stringify({ collapseAgentTurns: false }));
+  // Fork: upstream tests expect upstream timelines and sidebars; fork tests turn these on.
+  localStorage.setItem(
+    FORK_SETTINGS_STORAGE_KEY,
+    JSON.stringify({ collapseAgentTurns: false, sidebarHierarchyEnabled: false }),
+  );
 });
 
 // The app initializes GT at startup; components using its hooks need the same here.

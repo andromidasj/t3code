@@ -13,6 +13,13 @@ export interface SidebarPage {
 
 const SIDEBAR_PAGE_IDS: ReadonlyArray<SidebarPageId> = ["board", "pull-requests", "issues"];
 
+/** A saved set of projects for the sidebar's project scope, by `environmentId:projectId` key. */
+export interface SidebarFilterPreset {
+  readonly id: string;
+  readonly name: string;
+  readonly projectKeys: ReadonlyArray<string>;
+}
+
 export interface ForkSettings {
   /** Mirrors the "board" entry of sidebarPages; it also gates the Board's shortcut and launch. */
   readonly boardEnabled: boolean;
@@ -23,6 +30,9 @@ export interface ForkSettings {
   readonly sidebarPages: ReadonlyArray<SidebarPage>;
   /** Fold routine agent-to-agent and automation turns in a thread into one strip. */
   readonly collapseAgentTurns: boolean;
+  /** The sidebar's All / Mine / Needs me filter and its Bot / Background drawer. */
+  readonly sidebarHierarchyEnabled: boolean;
+  readonly sidebarFilterPresets: ReadonlyArray<SidebarFilterPreset>;
 }
 
 export const FORK_SETTINGS_STORAGE_KEY = "t3code:fork:settings:v1";
@@ -33,6 +43,8 @@ export const DEFAULT_FORK_SETTINGS: ForkSettings = {
   openBoardOnLaunch: false,
   sidebarPages: SIDEBAR_PAGE_IDS.map((id) => ({ id, visible: true })),
   collapseAgentTurns: true,
+  sidebarHierarchyEnabled: true,
+  sidebarFilterPresets: [],
 };
 
 type ForkSettingsStorage = Pick<Storage, "getItem" | "setItem">;
@@ -132,6 +144,23 @@ export function moveSidebarPage(
   return next;
 }
 
+/** Stored presets that have an id, a name and at least one project key; repeated ids dropped. */
+export function normalizeSidebarFilterPresets(raw: unknown): ReadonlyArray<SidebarFilterPreset> {
+  const presets: SidebarFilterPreset[] = [];
+  for (const entry of Array.isArray(raw) ? raw : []) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const { id, name, projectKeys } = entry as Record<string, unknown>;
+    if (typeof id !== "string" || id === "" || typeof name !== "string") continue;
+    if (presets.some((preset) => preset.id === id)) continue;
+    const keys = Array.isArray(projectKeys)
+      ? [...new Set(projectKeys.filter((key): key is string => typeof key === "string"))]
+      : [];
+    if (keys.length === 0) continue;
+    presets.push({ id, name, projectKeys: keys });
+  }
+  return presets;
+}
+
 function parseForkSettings(raw: string | null): ForkSettings {
   if (raw === null) return DEFAULT_FORK_SETTINGS;
   let parsed: unknown;
@@ -161,6 +190,11 @@ function parseForkSettings(raw: string | null): ForkSettings {
       typeof record.collapseAgentTurns === "boolean"
         ? record.collapseAgentTurns
         : DEFAULT_FORK_SETTINGS.collapseAgentTurns,
+    sidebarHierarchyEnabled:
+      typeof record.sidebarHierarchyEnabled === "boolean"
+        ? record.sidebarHierarchyEnabled
+        : DEFAULT_FORK_SETTINGS.sidebarHierarchyEnabled,
+    sidebarFilterPresets: normalizeSidebarFilterPresets(record.sidebarFilterPresets),
   };
 }
 

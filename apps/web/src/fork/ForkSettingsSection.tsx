@@ -1,5 +1,5 @@
 import { T, useGT } from "gt-react";
-import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowUpIcon, XIcon } from "lucide-react";
 
 import { SettingsRow, SettingsSection } from "~/components/settings/settingsLayout";
 import { Button } from "~/components/ui/button";
@@ -12,8 +12,10 @@ import {
   setSidebarPageVisible,
   updateForkSettings,
   useForkSettings,
+  type SidebarFilterPreset,
   type SidebarPage,
 } from "./forkSettings";
+import { removeSidebarFilterPreset, renameSidebarFilterPreset } from "./sidebarHierarchy";
 import { SIDEBAR_PAGE_ICONS, useSidebarPageLabels } from "./sidebarPages";
 
 /** Settings this fork adds, saved on this Mac only. Shown under Settings, Labs. */
@@ -100,7 +102,79 @@ export function ForkSettingsSection() {
           />
         }
       />
+      <SettingsRow
+        devicePreference
+        title={gt("Sidebar filter and Bot / Background")}
+        description={gt(
+          "Show All, Mine and Needs me above the thread list, and fold threads bots started on their own (that you never wrote in) into a collapsible Bot / Background section.",
+        )}
+        control={
+          <Switch
+            checked={settings.sidebarHierarchyEnabled}
+            onCheckedChange={(checked) =>
+              updateForkSettings({ sidebarHierarchyEnabled: Boolean(checked) })
+            }
+            aria-label={gt("Sidebar filter and Bot / Background")}
+          />
+        }
+      />
+      {settings.sidebarFilterPresets.length > 0 ? (
+        <SettingsRow
+          devicePreference
+          title={gt("Saved sidebar views")}
+          description={gt(
+            "Project selections saved from the sidebar. Rename or delete them here; save new ones from the sidebar with Save view.",
+          )}
+        >
+          <SidebarFilterPresetsControl presets={settings.sidebarFilterPresets} />
+        </SettingsRow>
+      ) : null}
     </SettingsSection>
+  );
+}
+
+function SidebarFilterPresetsControl(props: { presets: ReadonlyArray<SidebarFilterPreset> }) {
+  const gt = useGT();
+  const { presets } = props;
+  return (
+    <ul className="mt-1 mb-2 flex flex-col gap-0.5" aria-label={gt("Saved sidebar views")}>
+      {presets.map((preset) => (
+        <li key={preset.id} className="flex items-center gap-2 rounded-md px-1 py-1">
+          <Input
+            size="sm"
+            className="min-w-0 flex-1"
+            defaultValue={preset.name}
+            aria-label={gt("Name of view {name}", { name: preset.name })}
+            onBlur={(event) =>
+              updateForkSettings({
+                sidebarFilterPresets: renameSidebarFilterPreset(
+                  presets,
+                  preset.id,
+                  event.target.value,
+                ),
+              })
+            }
+          />
+          <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
+            {gt("{count, plural, one {# project} other {# projects}}", {
+              count: preset.projectKeys.length,
+            })}
+          </span>
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            aria-label={gt("Delete view {name}", { name: preset.name })}
+            onClick={() =>
+              updateForkSettings({
+                sidebarFilterPresets: removeSidebarFilterPreset(presets, preset.id),
+              })
+            }
+          >
+            <XIcon />
+          </Button>
+        </li>
+      ))}
+    </ul>
   );
 }
 

@@ -28,6 +28,8 @@ keeps your sign-in, settings and threads.
      only) and whether the app opens on the Board. The bot board is bot-desk `board.py`'s
      output: its web address (e.g. `https://host:8447/`) or its folder on this Mac (e.g.
      `~/dev/bot/.board`). The desktop app reads `data.json` there, or the data `index.html` embeds.
+     "Collapse routine bot updates" (on by default) folds finished agent-to-agent and scheduled
+     turns into one "Bot activity" strip; running, failed, waiting and 👉 turns stay open.
    - Thread details limits for CLIProxyAPI threads (official since 0.1.12) come from Settings →
      Usage Providers; the hub's URL there must use the same host and port as the provider's base
      URL, or the pane says "Unavailable".
@@ -60,3 +62,4 @@ reinstalls the current release.
 | Board view (`/board`, ⌥⇧⌘B) and per-Mac settings  | none (fork-only)           | upstream ships a cross-thread board    |
 | Board shows bot-desk items, Today and details     | none (fork-only)           | the Board patch is dropped             |
 | Board right panel, sidebar pages, "Open in" desk  | none (fork-only)           | the Board patch is dropped             |
+| Collapse routine bot updates in threads           | none (fork-only)           | upstream folds agent-to-agent turns    |

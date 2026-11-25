@@ -29,6 +29,8 @@ import type { WorkflowOpening } from "@t3tools/client-runtime/state/subagentRunt
 import { observeResize } from "~/lib/observeResize";
 import { preserveReadingPosition } from "~/lib/preserveReadingPosition";
 import { useStableCallback } from "~/hooks/useStableCallback";
+import { CollapsedAgentTurnsRow } from "~/fork/CollapsedAgentTurnsRow";
+import { useAgentTurnFolding } from "~/fork/useAgentTurnFolding";
 
 const NOOP_USE_ARTIFACT_TEMPLATE = () => {};
 const EMPTY_PENDING_APPROVALS: ReadonlyArray<PendingApproval> = [];
@@ -784,7 +786,17 @@ const ConversationTimeline = memo(function ConversationTimeline({
     toolCallVisibility,
     revealedMessageId,
   });
-  const rows = useStableRows(rawRows, listIdentityKey);
+  const rows = useAgentTurnFolding(useStableRows(rawRows, listIdentityKey), {
+    threadKey: listIdentityKey,
+    disabled: findActive,
+    pendingApprovalRequestIds,
+    latestRun,
+    runningRunId,
+    usageLimitRunId,
+    isWorking,
+    pinnedIds: new Set(revealedMessageId ? [revealedMessageId] : []),
+    onBeforeToggle: (foldId) => preserveDisclosurePosition(foldId),
+  });
   const matchedApprovalRequestIds = new Set<string>();
   for (const row of pendingApprovalRequestIds.size > 0 ? rows : []) {
     const entries =
@@ -1752,6 +1764,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       {row.kind === "working" ? <WorkingTimelineRow row={row} /> : null}
       {row.kind === "worktree-setup" ? <WorktreeSetupTimelineRow row={row} /> : null}
       {row.kind === "event" ? <V2EventTimelineRow row={row} /> : null}
+      {row.kind === "agent-turn-fold" ? <CollapsedAgentTurnsRow row={row} /> : null}
     </div>
   );
 });

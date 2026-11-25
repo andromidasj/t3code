@@ -185,3 +185,27 @@ it("opens a pull request linked on the Issues page beside its issues", async () 
   ).toMatchObject({ isOpen: true, surfaces: [{ kind: "pull-request", number: 86 }] });
   expect(screen.router?.state.location.pathname).toBe("/issues");
 });
+
+it("opens a pull request beside a thread whose environment has no checkout of the repository", async () => {
+  setup();
+  const deskRef = scopeThreadRef(EnvironmentId.make("desk-vm"), ThreadId.make("desk"));
+  function DeskThreadLink() {
+    const open = useOpenChangeRequestLink(deskRef);
+    return (
+      <a href={pullRequestUrl} onClick={(event) => open(event, pullRequestUrl)}>
+        Desk pull request
+      </a>
+    );
+  }
+  await using screen = await render(
+    <AppAtomRegistryProvider>
+      <DeskThreadLink />
+    </AppAtomRegistryProvider>,
+  );
+  await screen.getByRole("link", { name: "Desk pull request" }).click();
+  expect(useRightPanelStore.getState().byThreadKey[scopedThreadKey(deskRef)]).toMatchObject({
+    isOpen: true,
+    surfaces: [{ kind: "pull-request", environmentId: "local", projectId: "project", number: 86 }],
+  });
+  expect(state.openLink).not.toHaveBeenCalled();
+});

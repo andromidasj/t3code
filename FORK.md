@@ -55,5 +55,6 @@ reinstalls the current release.
 | "Open in new threads" setting for Thread details  | PR #25598                  | that PR or an equivalent merges        |
 | ⌘⌥←/→ switch to the next/previous right panel tab | PR #34437                  | that PR or an equivalent merges        |
 | ⌘⌥1–9 jump to a right panel tab (9 = last)        | none (fork-only)           | upstream ships tab jump shortcuts      |
+| PR links open via any environment with the repo   | none (fork-only)           | upstream resolves links across envs    |
 | Board view (`/board`, ⌥⇧⌘B) and per-Mac settings  | none (fork-only)           | upstream ships a cross-thread board    |
 | Board shows bot-desk items, Today and details     | none (fork-only)           | the Board patch is dropped             |

@@ -38,6 +38,9 @@ keeps your sign-in, settings and threads.
      trailing `[t3-delivery: <mode>]` line on its prompt, which the agent reads and the app hides.
      Silent and Updates only skip the "Thread completed" notice for that task's runs on this Mac;
      failures, approvals and questions still notify. Unmarked tasks notify as before.
+     The Board's Jobs view, and the Scheduled jobs strip at the bottom of All (open while a job
+     fails), list every connected environment's tasks, failed first, with Delivery, Run now and
+     Edit; the bot filter narrows them to that desk's projects.
    - Thread details limits for CLIProxyAPI threads (official since 0.1.12) come from Settings →
      Usage Providers; the hub's URL there must use the same host and port as the provider's base
      URL, or the pane says "Unavailable".
@@ -73,3 +76,4 @@ reinstalls the current release.
 | Collapse routine bot updates in threads           | none (fork-only)           | upstream folds agent-to-agent turns    |
 | Scheduled task delivery modes                     | none (fork-only)           | upstream ships per-task notify modes   |
 | Sidebar All/Mine/Needs me, Bot / Background       | none (fork-only)           | upstream separates bot threads         |
+| Scheduled jobs health on the Board (Jobs)         | none (fork-only)           | the Board patch is dropped             |

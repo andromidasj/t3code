@@ -74,6 +74,11 @@ import {
 } from "./board.logic";
 import { DeskBadge, ItemTypeBadge, NotReadyBadge, WhenBadge } from "./boardBadges";
 import { useBoardData, type BoardDataHandle } from "./boardData";
+import {
+  BoardJobsCountBadge,
+  BoardScheduledJobsSection,
+  useBoardScheduledJobs,
+} from "./BoardScheduledJobsSection";
 import { BoardItemDetailPanel } from "./BoardItemDetailPanel";
 import { useLeaveBoard } from "./boardNavigation";
 import {
@@ -145,6 +150,7 @@ export function BoardPage() {
   );
   const showEnvironment = environments.length > 1;
   const model = buildBoardModel(listedThreads, projectNames);
+  const jobs = useBoardScheduledJobs(connectedIds, projectNames, filterProjectKeys);
   const items = rankBoardItems(data, filterDesk?.slug ?? null);
   const today = collectBoardToday(data, filterDesk?.slug ?? null);
   const readyItemCount = items.ranked.filter((row) => row.item.banner === null).length;
@@ -473,6 +479,12 @@ export function BoardPage() {
                       <CountBadge count={today.length} />
                     </Toggle>
                   )}
+                  {jobs.total === 0 && view !== "jobs" ? null : (
+                    <Toggle value="jobs">
+                      <T context="board filter, scheduled tasks">Jobs</T>
+                      <BoardJobsCountBadge rows={jobs.rows} />
+                    </Toggle>
+                  )}
                   {webUrl === null ? null : (
                     <Toggle value="web">
                       <T context="board filter, the bot board's own web page">Web</T>
@@ -540,6 +552,9 @@ export function BoardPage() {
                 {view === "all" || view === "running" ? runningSection : null}
                 {view === "all" || view === "today" ? todaySection : null}
                 {view === "all" ? pinnedSection : null}
+                {view === "all" || view === "jobs" ? (
+                  <BoardScheduledJobsSection rows={jobs.rows} collapsible={view === "all"} />
+                ) : null}
               </WorkspacePageContainer>
             </div>
           )}

@@ -147,6 +147,15 @@ import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../
 import { Switch } from "../ui/switch";
 import { Textarea } from "../ui/textarea";
 import { stackedThreadToast, toastManager } from "../ui/toast";
+import {
+  applyScheduledDeliveryMode,
+  parseScheduledDeliveryMode,
+  stripScheduledDeliveryDirective,
+} from "~/fork/scheduledDelivery";
+import {
+  ScheduledDeliveryField,
+  ScheduledTaskDeliverySwitch,
+} from "~/fork/ScheduledDeliveryControl";
 import { useSearchableSetting } from "./settingsSearch";
 import {
   SettingsPageContainer,
@@ -864,7 +873,9 @@ function ScheduledTaskRow({
   return (
     <SettingsRow
       title={task.title}
-      description={<span className="line-clamp-2">{task.prompt}</span>}
+      description={
+        <span className="line-clamp-2">{stripScheduledDeliveryDirective(task.prompt)}</span>
+      }
       status={
         <div className="flex flex-wrap items-center gap-2">
           <span>
@@ -896,6 +907,7 @@ function ScheduledTaskRow({
               {messages(RUN_STATUS_LABELS[task.lastRunStatus])}
             </Badge>
           ) : null}
+          <ScheduledTaskDeliverySwitch environmentId={environmentId} task={task} />
           {task.threadId !== null && scheduledTaskThreadMode(task) !== "new_thread" ? (
             <ScheduledTaskThreadLink environmentId={environmentId} threadId={task.threadId} />
           ) : null}
@@ -1543,11 +1555,14 @@ function ScheduledTaskEditorForm({
   );
   const [draft, setDraft] = useState<DraftState>(() =>
     task
-      ? taskToDraft(task)
+      ? { ...taskToDraft(task), prompt: stripScheduledDeliveryDirective(task.prompt) }
       : {
           ...EMPTY_DRAFT,
           projectId: defaultScheduledTaskProjectId(scopedProjects, scope),
         },
+  );
+  const [deliveryMode, setDeliveryMode] = useState(() =>
+    task ? parseScheduledDeliveryMode(task.prompt) : ("always" as const),
   );
   // Pinned first. The chosen project stays listed after it is archived.
   const projects = scopedProjects
@@ -1707,7 +1722,7 @@ function ScheduledTaskEditorForm({
     const input: ScheduledTaskUpsertInput = {
       ...(draft.editingId ? { id: draft.editingId as ScheduledTaskId, requireExisting: true } : {}),
       title: draft.title.trim(),
-      prompt: draft.prompt.trim(),
+      prompt: applyScheduledDeliveryMode(draft.prompt.trim(), deliveryMode),
       enabled: draft.enabled,
       schedule,
       projectId: selectedProjectId as ProjectId,
@@ -1969,6 +1984,8 @@ function ScheduledTaskEditorForm({
               }
             />
           </Field>
+
+          <ScheduledDeliveryField value={deliveryMode} onChange={setDeliveryMode} />
 
           <Field label={gt("Model")}>
             <div className="flex flex-wrap items-center gap-1.5">

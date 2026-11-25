@@ -42,6 +42,7 @@ import {
   type ThreadNotificationObservation,
 } from "./ThreadNotificationCoordinator.logic";
 import { toastManager } from "./ui/toast";
+import { watchScheduledDelivery } from "../fork/scheduledNotificationGate";
 
 interface NotificationState extends ThreadNotificationObservation {
   readonly raw: OrchestrationV2ThreadShell;
@@ -57,6 +58,7 @@ interface WatchedEnvironment {
   previous: Map<ThreadId, NotificationState>;
   reconnecting: boolean;
   readonly gate: ReturnType<typeof createThreadNotificationGate<ThreadId>>;
+  readonly scheduled: ReturnType<typeof watchScheduledDelivery>;
 }
 
 /**
@@ -307,7 +309,9 @@ export function startThreadNotifications(
     for (const [prior, state] of changed) {
       entry.gate.observe(state.thread.id, prior, state, {
         archived: state.thread.archivedAt !== null,
-        quiet: state.raw.latestRunStopRequested === true,
+        quiet:
+          state.raw.latestRunStopRequested === true ||
+          entry.scheduled.quietCompletion(state.thread),
         snoozed: isSnoozedForNotification(state.thread, state.completedAt, now),
       });
     }
@@ -322,6 +326,7 @@ export function startThreadNotifications(
         const state = entry.previous.get(threadId);
         if (state) present(environmentId, state, kind);
       }),
+      scheduled: watchScheduledDelivery(registry, environmentId),
     };
     let threads: ReadonlyArray<OrchestrationV2ThreadShell> | null = null;
     const unsubscribeShell = registry.subscribe(
@@ -355,6 +360,7 @@ export function startThreadNotifications(
       unsubscribeShell();
       unsubscribeRequests();
       unsubscribeDelegated();
+      entry.scheduled.unsubscribe();
       entry.gate.clear();
     };
     return entry;

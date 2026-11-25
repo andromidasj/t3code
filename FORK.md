@@ -30,6 +30,10 @@ keeps your sign-in, settings and threads.
      `~/dev/bot/.board`). The desktop app reads `data.json` there, or the data `index.html` embeds.
      "Collapse routine bot updates" (on by default) folds finished agent-to-agent and scheduled
      turns into one "Bot activity" strip; running, failed, waiting and 👉 turns stay open.
+   - Settings → Scheduled tasks: each task's Delivery (Silent, Updates only, Always) is stored as a
+     trailing `[t3-delivery: <mode>]` line on its prompt, which the agent reads and the app hides.
+     Silent and Updates only skip the "Thread completed" notice for that task's runs on this Mac;
+     failures, approvals and questions still notify. Unmarked tasks notify as before.
    - Thread details limits for CLIProxyAPI threads (official since 0.1.12) come from Settings →
      Usage Providers; the hub's URL there must use the same host and port as the provider's base
      URL, or the pane says "Unavailable".
@@ -63,3 +67,4 @@ reinstalls the current release.
 | Board shows bot-desk items, Today and details     | none (fork-only)           | the Board patch is dropped             |
 | Board right panel, sidebar pages, "Open in" desk  | none (fork-only)           | the Board patch is dropped             |
 | Collapse routine bot updates in threads           | none (fork-only)           | upstream folds agent-to-agent turns    |
+| Scheduled task delivery modes                     | none (fork-only)           | upstream ships per-task notify modes   |

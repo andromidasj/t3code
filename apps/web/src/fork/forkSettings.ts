@@ -21,6 +21,8 @@ export interface ForkSettings {
   readonly openBoardOnLaunch: boolean;
   /** The pages at the top of the sidebar, in order. Pages a server does not support stay hidden. */
   readonly sidebarPages: ReadonlyArray<SidebarPage>;
+  /** Fold routine agent-to-agent and automation turns in a thread into one strip. */
+  readonly collapseAgentTurns: boolean;
 }
 
 export const FORK_SETTINGS_STORAGE_KEY = "t3code:fork:settings:v1";
@@ -30,6 +32,7 @@ export const DEFAULT_FORK_SETTINGS: ForkSettings = {
   boardUrl: "",
   openBoardOnLaunch: false,
   sidebarPages: SIDEBAR_PAGE_IDS.map((id) => ({ id, visible: true })),
+  collapseAgentTurns: true,
 };
 
 type ForkSettingsStorage = Pick<Storage, "getItem" | "setItem">;
@@ -154,6 +157,10 @@ function parseForkSettings(raw: string | null): ForkSettings {
         ? record.openBoardOnLaunch
         : DEFAULT_FORK_SETTINGS.openBoardOnLaunch,
     sidebarPages,
+    collapseAgentTurns:
+      typeof record.collapseAgentTurns === "boolean"
+        ? record.collapseAgentTurns
+        : DEFAULT_FORK_SETTINGS.collapseAgentTurns,
   };
 }
 

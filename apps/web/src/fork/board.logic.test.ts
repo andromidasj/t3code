@@ -323,9 +323,20 @@ describe("fork settings storage", () => {
       boardUrl: "https://board.example/",
       openBoardOnLaunch: true,
       sidebarPages: DEFAULT_FORK_SETTINGS.sidebarPages,
+      collapseAgentTurns: true,
     };
     expect(readForkSettings(storage)).toEqual(expected);
     expect(JSON.parse(storage.values.get(FORK_SETTINGS_STORAGE_KEY) ?? "null")).toEqual(expected);
+  });
+  it("keeps the routine bot update folding switch", () => {
+    const storage = memoryStorage();
+    expect(readForkSettings(storage).collapseAgentTurns).toBe(true);
+    updateForkSettings({ collapseAgentTurns: false }, storage);
+    expect(readForkSettings(storage).collapseAgentTurns).toBe(false);
+    const garbage = memoryStorage({
+      [FORK_SETTINGS_STORAGE_KEY]: JSON.stringify({ collapseAgentTurns: "no" }),
+    });
+    expect(readForkSettings(garbage).collapseAgentTurns).toBe(true);
   });
 });
 

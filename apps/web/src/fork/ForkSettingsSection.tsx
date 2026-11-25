@@ -84,6 +84,22 @@ export function ForkSettingsSection() {
           />
         }
       />
+      <SettingsRow
+        devicePreference
+        title={gt("Collapse routine bot updates")}
+        description={gt(
+          "Fold consecutive agent-to-agent and automation turns in a thread into a single expandable strip, keeping approvals, errors, and 👉 Needs you messages expanded.",
+        )}
+        control={
+          <Switch
+            checked={settings.collapseAgentTurns}
+            onCheckedChange={(checked) =>
+              updateForkSettings({ collapseAgentTurns: Boolean(checked) })
+            }
+            aria-label={gt("Collapse routine bot updates")}
+          />
+        }
+      />
     </SettingsSection>
   );
 }

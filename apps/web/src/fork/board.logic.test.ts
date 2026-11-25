@@ -2,16 +2,40 @@ import { EnvironmentId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  boardDeskCounts,
+  boardItemKey,
   boardProjectKey,
   boardSearchFromUrl,
   buildBoardModel,
+  collectBoardToday,
   countNeedsMe,
+  countReadyBoardItems,
+  findBoardItem,
+  findBoardItemById,
+  findDeskThreadRef,
+  matchDeskProjects,
   opensFullThread,
+  parseBoardItemKey,
+  parseBoardThreadHref,
+  plainBoardText,
+  rankBoardItems,
+  rewriteBoardThreadLinks,
+  type BoardProjectInput,
   type BoardThreadInput,
 } from "./board.logic";
 import {
+  browserBoardCandidates,
+  extractBoardDataFromHtml,
+  parseBoardPayload,
+  parseBoardText,
+  type BoardData,
+  type BoardDesk,
+  type BoardItem,
+} from "./boardData";
+import {
   DEFAULT_FORK_SETTINGS,
   FORK_SETTINGS_STORAGE_KEY,
+  normalizeBoardSource,
   normalizeBoardUrl,
   readForkSettings,
   updateForkSettings,
@@ -205,6 +229,28 @@ describe("boardSearchFromUrl", () => {
     expect(boardSearchFromUrl({ boardThreadId: "t" })).toEqual({});
     expect(boardSearchFromUrl({ boardEnvironmentId: "env", boardThreadId: 3 })).toEqual({});
   });
+
+  it("keeps a Board item, its pane and the desk filter, but not an item and a thread at once", () => {
+    expect(
+      boardSearchFromUrl({
+        boardView: "today",
+        boardDesk: "chief",
+        boardItem: "chief/cliproxyUpdate",
+        boardPane: "chat",
+      }),
+    ).toEqual({
+      boardView: "today",
+      boardDesk: "chief",
+      boardItem: "chief/cliproxyUpdate",
+      boardPane: "chat",
+    });
+    expect(boardSearchFromUrl({ boardItem: "chief/x", boardPane: "other" })).toEqual({
+      boardItem: "chief/x",
+    });
+    expect(
+      boardSearchFromUrl({ boardItem: "chief/x", boardEnvironmentId: "env", boardThreadId: "t" }),
+    ).toEqual({ boardEnvironmentId: "env", boardThreadId: "t" });
+  });
 });
 
 describe("opensFullThread", () => {
@@ -237,6 +283,27 @@ describe("normalizeBoardUrl", () => {
     expect(normalizeBoardUrl("/board")).toBeNull();
     expect(normalizeBoardUrl("javascript:alert(1)")).toBeNull();
     expect(normalizeBoardUrl("file:///etc/passwd")).toBeNull();
+  });
+});
+
+describe("normalizeBoardSource", () => {
+  it("accepts web URLs, file URLs and absolute or home paths", () => {
+    expect(normalizeBoardSource(" https://host:8447/ ")).toBe("https://host:8447/");
+    expect(normalizeBoardSource("http://127.0.0.1:8447/")).toBe("http://127.0.0.1:8447/");
+    expect(normalizeBoardSource("file:///Users/me/dev/bot/.board/data.json")).toBe(
+      "file:///Users/me/dev/bot/.board/data.json",
+    );
+    expect(normalizeBoardSource("/Users/me/dev/bot/.board")).toBe("/Users/me/dev/bot/.board");
+    expect(normalizeBoardSource("~/dev/bot/.board")).toBe("~/dev/bot/.board");
+  });
+
+  it("rejects other schemes and relative paths", () => {
+    expect(normalizeBoardSource("")).toBeNull();
+    expect(normalizeBoardSource("javascript:alert(1)")).toBeNull();
+    expect(normalizeBoardSource("ftp://host/board")).toBeNull();
+    expect(normalizeBoardSource("dev/bot/.board")).toBeNull();
+    expect(normalizeBoardSource("~someone/board")).toBeNull();
+    expect(normalizeBoardSource("file:///")).toBeNull();
   });
 });
 
@@ -273,5 +340,322 @@ describe("fork settings storage", () => {
       boardUrl: "https://board.example/",
       openBoardOnLaunch: true,
     });
+  });
+});
+
+function item(id: string, overrides: Partial<BoardItem> = {}): BoardItem {
+  return {
+    id,
+    type: "do",
+    ask: `Ask ${id}`,
+    when: "now",
+    unblocks: [],
+    banner: null,
+    path: `/home/bots/chief/open/${id}.md`,
+    body: "",
+    checked: null,
+    rank: 0,
+    reach: 0,
+    ...overrides,
+  };
+}
+
+function desk(slug: string, items: BoardItem[], overrides: Partial<BoardDesk> = {}): BoardDesk {
+  return {
+    name: slug.charAt(0).toUpperCase() + slug.slice(1),
+    slug,
+    items,
+    rows: [],
+    today: [],
+    errors: [],
+    ...overrides,
+  };
+}
+
+const board = (...desks: BoardDesk[]): BoardData => ({ built: "2026-11-25T10:00:00-06:00", desks });
+
+describe("parseBoardPayload", () => {
+  it("reads board.py's page data and drops malformed entries", () => {
+    const parsed = parseBoardPayload({
+      built: "2026-11-25T10:17:51-06:00",
+      desks: [
+        {
+          name: "Eagle Eye",
+          slug: "eagle-eye",
+          items: [
+            {
+              id: "agentTestChecks",
+              type: "decide",
+              ask: "Let an agent run checks?",
+              when: "anytime",
+              unblocks: ["EAG-1", 3],
+              banner: null,
+              path: "/home/josh/bots/eagle-eye/open/agent-test-checks.md",
+              body: "# Body",
+              checked: "2026-11-24T22:03:00-06:00",
+              rank: 9,
+              reach: 2,
+            },
+            { type: "do" },
+            "nonsense",
+          ],
+          rows: [{ id: "EAG-1", url: null, section: "s", cols: ["id"], cells: ["EAG-1"] }],
+          today: [{ t: "2026-11-25T01:25:00-06:00", text: "Zach answered" }, { t: 1 }],
+          errors: ["work.md: x"],
+        },
+        { items: [] },
+      ],
+    });
+    expect(parsed?.built).toBe("2026-11-25T10:17:51-06:00");
+    expect(parsed?.desks).toHaveLength(1);
+    const [eagle] = parsed!.desks;
+    expect(eagle?.items).toEqual([
+      {
+        id: "agentTestChecks",
+        type: "decide",
+        ask: "Let an agent run checks?",
+        when: "anytime",
+        unblocks: ["EAG-1"],
+        banner: null,
+        path: "/home/josh/bots/eagle-eye/open/agent-test-checks.md",
+        body: "# Body",
+        checked: "2026-11-24T22:03:00-06:00",
+        rank: 9,
+        reach: 2,
+      },
+    ]);
+    expect(eagle?.rows[0]).toMatchObject({ id: "EAG-1", blockedBy: [], unblocks: [] });
+    expect(eagle?.today).toEqual([{ t: "2026-11-25T01:25:00-06:00", text: "Zach answered" }]);
+    expect(eagle?.errors).toEqual(["work.md: x"]);
+  });
+
+  it("rejects payloads without desks", () => {
+    expect(parseBoardPayload(null)).toBeNull();
+    expect(parseBoardPayload({ built: "x" })).toBeNull();
+    expect(parseBoardPayload([])).toBeNull();
+  });
+});
+
+describe("board page fallback", () => {
+  const data = { built: "2026-11-25T10:00:00-06:00", desks: [{ name: "Chief", slug: "chief" }] };
+
+  it("pulls the embedded DATA line out of board.py's index.html", () => {
+    const html = [
+      "<!doctype html><script>",
+      `const DATA = ${JSON.stringify({ ...data, note: "</script>" }).replace("</", "<\\/")};`,
+      'const DESK_COLORS = ["#6b7cff"];',
+      "</script>",
+    ].join("\n");
+    expect(extractBoardDataFromHtml(html)).toEqual({ ...data, note: "</script>" });
+    expect(parseBoardText(html)?.desks.map((entry) => entry.slug)).toEqual(["chief"]);
+  });
+
+  it("reads data.json and ignores the unfilled template", () => {
+    expect(parseBoardText(JSON.stringify(data))?.desks).toHaveLength(1);
+    expect(parseBoardText("const DATA = /*DATA*/null;\n")).toBeNull();
+    expect(parseBoardText("<html></html>")).toBeNull();
+  });
+
+  it("tries data.json before the page for a folder URL in a browser", () => {
+    expect(browserBoardCandidates("https://host:8447/")).toEqual([
+      "https://host:8447/data.json",
+      "https://host:8447/",
+    ]);
+    expect(browserBoardCandidates("https://host/board/index.html#chief")).toEqual([
+      "https://host/board/index.html",
+    ]);
+    expect(browserBoardCandidates("~/dev/bot/.board")).toBeNull();
+    expect(browserBoardCandidates("file:///tmp/data.json")).toBeNull();
+  });
+});
+
+describe("rankBoardItems", () => {
+  it("orders ready before not ready, now before anytime, then reach and rank, and folds later", () => {
+    const data = board(
+      desk("chief", [
+        item("anytime-wide", { when: "anytime", reach: 3 }),
+        item("now-rank1", { rank: 1 }),
+        item("not-ready", { banner: "waiting on Zach" }),
+        item("later", { when: "later" }),
+      ]),
+      desk("house", [
+        item("now-rank0"),
+        item("now-reach2", { reach: 2, rank: 4 }),
+        item("anytime", { when: "anytime" }),
+      ]),
+    );
+    const lists = rankBoardItems(data);
+    expect(lists.ranked.map((row) => row.item.id)).toEqual([
+      "now-reach2",
+      "now-rank0",
+      "now-rank1",
+      "anytime-wide",
+      "anytime",
+      "not-ready",
+    ]);
+    expect(lists.later.map((row) => row.key)).toEqual(["chief/later"]);
+    expect(countReadyBoardItems(data)).toBe(5);
+    expect(rankBoardItems(data, "house").ranked.map((row) => row.item.id)).toEqual([
+      "now-reach2",
+      "now-rank0",
+      "anytime",
+    ]);
+    expect(rankBoardItems(null)).toEqual({ ranked: [], later: [] });
+  });
+
+  it("counts open items per desk, leaving out desks with none", () => {
+    const data = board(desk("chief", [item("a"), item("b", { when: "later" })]), desk("house", []));
+    expect(boardDeskCounts(data).map((entry) => [entry.desk.slug, entry.count])).toEqual([
+      ["chief", 2],
+    ]);
+  });
+});
+
+describe("Board item lookup", () => {
+  const data = board(desk("chief", [item("a", { unblocks: ["b"] })]), desk("house", [item("b")]));
+
+  it("round-trips item keys and finds items by key or id", () => {
+    expect(boardItemKey("chief", "a")).toBe("chief/a");
+    expect(parseBoardItemKey("chief/a/b")).toEqual({ deskSlug: "chief", itemId: "a/b" });
+    expect(parseBoardItemKey("chief")).toBeNull();
+    expect(parseBoardItemKey("/a")).toBeNull();
+    expect(findBoardItem(data, "chief/a")?.item.id).toBe("a");
+    expect(findBoardItem(data, "house/a")).toBeNull();
+    expect(findBoardItemById(data, "b", "chief")?.key).toBe("house/b");
+    expect(findBoardItemById(data, "missing", "chief")).toBeNull();
+  });
+});
+
+describe("collectBoardToday", () => {
+  it("merges every desk's Today events, newest first", () => {
+    const data = board(
+      desk("chief", [], {
+        today: [
+          { t: "2026-11-25T08:00:00-06:00", text: "early" },
+          { t: "2026-11-25T11:00:00-06:00", text: "late" },
+        ],
+      }),
+      desk("eagle-eye", [], { today: [{ t: "2026-11-25T09:30:00-06:00", text: "middle" }] }),
+    );
+    expect(collectBoardToday(data).map((row) => row.event.text)).toEqual([
+      "late",
+      "middle",
+      "early",
+    ]);
+    expect(collectBoardToday(data, "eagle-eye").map((row) => row.desk.slug)).toEqual(["eagle-eye"]);
+  });
+});
+
+describe("findDeskThreadRef", () => {
+  const project = (
+    id: string,
+    title: string,
+    workspaceRoot: string,
+    overrides: Partial<BoardProjectInput> = {},
+  ): BoardProjectInput => ({
+    environmentId: ENV,
+    id: ProjectId.make(id),
+    title,
+    workspaceRoot,
+    archivedAt: null,
+    ...overrides,
+  });
+
+  const chiefProject = project("p-chief", "Chief", "/home/josh/bots/chief");
+  const homelabProject = project("p-homelab", "Homelab & Media", "/home/josh/bots/homelab/");
+  const eagleProject = project("p-eagle", "Eagle Eye", "/srv/elsewhere/eer", {
+    environmentId: OTHER_ENV,
+  });
+  const projects = [chiefProject, homelabProject, eagleProject];
+
+  it("matches a desk by its folder, its slug as folder name, or its name as title", () => {
+    const arlo = desk("homelab", [], { name: "Arlo" });
+    expect(matchDeskProjects(arlo, projects)).toEqual([homelabProject]);
+    const eagle = desk("eagle-eye", [], { name: "Eagle Eye" });
+    expect(matchDeskProjects(eagle, projects)).toEqual([eagleProject]);
+    const chief = desk("chief", [item("x", { path: "/home/josh/bots/chief/open/x.md" })], {
+      name: "Chief",
+    });
+    const decoy = project("p-decoy", "Chief", "/Users/me/chief");
+    expect(matchDeskProjects(chief, [decoy, chiefProject])).toEqual([chiefProject]);
+    expect(matchDeskProjects(desk("nobody", []), projects)).toEqual([]);
+    expect(
+      matchDeskProjects(desk("chief", []), [
+        project("p-old", "Chief", "/x/chief", { archivedAt: "2026-11-01T00:00:00.000Z" }),
+      ]),
+    ).toEqual([]);
+  });
+
+  it("returns the pinned thread, else the newest listed thread, in the desk's projects", () => {
+    const chief = desk("chief", [], { name: "Chief" });
+    const inChief = (id: string, overrides: Partial<BoardThreadInput> = {}) =>
+      thread(id, { projectId: chiefProject.id, ...overrides });
+    const parent = ThreadId.make("main");
+    const threads = [
+      inChief("old", { updatedAt: "2026-11-20T08:00:00.000Z" }),
+      inChief("new", { updatedAt: "2026-11-25T08:00:00.000Z" }),
+      inChief("archived", {
+        updatedAt: "2026-11-26T08:00:00.000Z",
+        archivedAt: "2026-11-26T08:00:00.000Z",
+      }),
+      inChief("subagent", {
+        updatedAt: "2026-11-27T08:00:00.000Z",
+        lineage: { parentThreadId: parent, relationshipToParent: "subagent", rootThreadId: parent },
+      }),
+      thread("other-project", {
+        projectId: homelabProject.id,
+        updatedAt: "2026-11-28T08:00:00.000Z",
+      }),
+    ];
+    expect(findDeskThreadRef(chief, projects, threads)).toEqual({
+      environmentId: ENV,
+      threadId: "new",
+    });
+    const pinned = [
+      ...threads,
+      inChief("pinned-old", {
+        pinnedAt: "2026-11-01T00:00:00.000Z",
+        updatedAt: "2026-11-01T00:00:00.000Z",
+      }),
+      inChief("pinned-new", {
+        pinnedAt: "2026-11-02T00:00:00.000Z",
+        updatedAt: "2026-11-01T00:00:00.000Z",
+      }),
+    ];
+    expect(findDeskThreadRef(chief, projects, pinned)?.threadId).toBe("pinned-new");
+    expect(findDeskThreadRef(desk("nobody", []), projects, threads)).toBeNull();
+  });
+});
+
+describe("Board thread links", () => {
+  it("parses t3-thread v2 and t3code thread links", () => {
+    expect(parseBoardThreadHref("t3-thread://v2/env-1/mcp:launch:abc")).toEqual({
+      environmentId: "env-1",
+      threadId: "mcp:launch:abc",
+    });
+    expect(parseBoardThreadHref("t3code://threads/env-1/thread%201")).toEqual({
+      environmentId: "env-1",
+      threadId: "thread 1",
+    });
+    expect(parseBoardThreadHref("t3-thread://v1/thread-only")).toBeNull();
+    expect(parseBoardThreadHref("t3code://threads/env-1")).toBeNull();
+    expect(parseBoardThreadHref("t3code://pair?x=1")).toBeNull();
+    expect(parseBoardThreadHref("https://example.com")).toBeNull();
+  });
+
+  it("rewrites t3code thread links in Markdown so T3 renders them as thread links", () => {
+    expect(
+      rewriteBoardThreadLinks(
+        "See [the lane](t3code://threads/env-1/abc) and [docs](https://example.com).",
+      ),
+    ).toBe("See [the lane](t3-thread://v2/env-1/abc) and [docs](https://example.com).");
+  });
+});
+
+describe("plainBoardText", () => {
+  it("drops link targets, code ticks and bold markers from a headline", () => {
+    expect(plainBoardText("Approve [EAG-487](https://x/EAG-487) and `cliproxy` **tonight**")).toBe(
+      "Approve EAG-487 and cliproxy tonight",
+    );
   });
 });

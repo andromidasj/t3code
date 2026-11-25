@@ -5,21 +5,21 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Switch } from "~/components/ui/switch";
 
-import { normalizeBoardUrl, updateForkSettings, useForkSettings } from "./forkSettings";
+import { normalizeBoardSource, updateForkSettings, useForkSettings } from "./forkSettings";
 
 /** Settings this fork adds, saved on this Mac only. Shown under Settings, Labs. */
 export function ForkSettingsSection() {
   const gt = useGT();
   const settings = useForkSettings();
   const boardUrlInvalid =
-    settings.boardUrl.trim() !== "" && normalizeBoardUrl(settings.boardUrl) === null;
+    settings.boardUrl.trim() !== "" && normalizeBoardSource(settings.boardUrl) === null;
   return (
     <SettingsSection id="fork-customizations" title={gt("Customizations")}>
       <SettingsRow
         devicePreference
         title={gt("Board view")}
         description={gt(
-          "Show a Board button in the sidebar with threads that need you and threads that are running.",
+          "Show a Board row at the top of the sidebar with what needs you and what is running.",
         )}
         control={
           <Switch
@@ -31,12 +31,14 @@ export function ForkSettingsSection() {
       />
       <SettingsRow
         devicePreference
-        title={gt("Board web page")}
-        description={gt("An http or https page to embed in the Board, saved on this device only.")}
+        title={gt("Bot board")}
+        description={gt(
+          "Where bot-desk's board lives: its web address, or its folder or data.json on this Mac. Saved on this device only.",
+        )}
         status={
           boardUrlInvalid ? (
             <span className="text-destructive-foreground">
-              <T>Use an address that starts with http:// or https://.</T>
+              <T>Use an http://, https:// or file:// address, or a path starting with / or ~/.</T>
             </span>
           ) : null
         }
@@ -44,12 +46,12 @@ export function ForkSettingsSection() {
           <div className="flex w-full items-center gap-1 sm:w-80">
             <Input
               size="sm"
-              type="url"
+              type="text"
               value={settings.boardUrl}
-              placeholder="https://host:8447/"
+              placeholder="https://host:8447/ or ~/dev/bot/.board"
               spellCheck={false}
               aria-invalid={boardUrlInvalid || undefined}
-              aria-label={gt("Board web page address")}
+              aria-label={gt("Bot board address or path")}
               onChange={(event) => updateForkSettings({ boardUrl: event.target.value })}
             />
             <Button

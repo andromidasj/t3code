@@ -2,11 +2,10 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { EnvironmentId, ThreadId, type ScopedThreadRef } from "@t3tools/contracts";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { T, useGT } from "gt-react";
-import { ExternalLinkIcon, Maximize2Icon, XIcon } from "lucide-react";
-import { useState, type MouseEvent, type ReactNode } from "react";
+import { ArrowLeftIcon, ChevronRightIcon, ExternalLinkIcon, PlugIcon } from "lucide-react";
+import { useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 
-import SideThreadPane from "~/components/chat/SideThreadPane";
-import { PreviewPanelShell } from "~/components/preview/PreviewPanelShell";
+import ChatMarkdown from "~/components/ChatMarkdown";
 import { RelativeTime } from "~/components/RelativeTime";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -19,42 +18,81 @@ import { WorkspaceBreadcrumb, WorkspaceBreadcrumbItem } from "~/components/Works
 import { WorkspacePageContainer } from "~/components/WorkspacePageContainer";
 import { WorkspacePageHeader } from "~/components/WorkspacePageHeader";
 import { isElectron } from "~/env";
-import type { SideChatParentPanel } from "~/lib/sideChatPane";
+import { usePrimarySettings } from "~/hooks/useSettings";
 import { cn } from "~/lib/utils";
 import { readLocalApi } from "~/localApi";
-import { useProjects, useThreadShell, useVisibleThreadShells } from "~/state/entities";
+import { useProjects, useVisibleThreadShells } from "~/state/entities";
 import { useConnectedEnvironmentIds, useEnvironments } from "~/state/environments";
+import { formatShortTimestamp } from "~/timestampFormat";
 
 import {
+  boardDeskColors,
+  boardDeskCounts,
   boardProjectKey,
   boardRunningSince,
   boardThreadKey,
   buildBoardModel,
+  collectBoardToday,
+  deskProjectKeys,
+  findBoardItem,
+  findDeskThreadRef,
   opensFullThread,
+  plainBoardText,
+  rankBoardItems,
+  rewriteBoardThreadLinks,
+  type BoardItemPane,
+  type BoardItemRow,
   type BoardRow,
   type BoardSearch,
   type BoardThreadInput,
+  type BoardTodayRow,
   type BoardUrgency,
   type BoardView,
 } from "./board.logic";
+import { DeskBadge, ItemTypeBadge, NotReadyBadge, WhenBadge } from "./boardBadges";
+import { useBoardData, type BoardDataHandle } from "./boardData";
+import { BoardItemDetailPanel } from "./BoardItemDetailPanel";
+import { useLeaveBoard } from "./boardNavigation";
+import { BoardThreadPanel, IconAction } from "./boardPanels";
 import { normalizeBoardUrl, useForkSettings } from "./forkSettings";
 
-// The board's panel has no thread of its own; side panes need a host ref in the shown
-// thread's environment, so each environment gets this sentinel thread id.
-const BOARD_PANEL_THREAD_ID = ThreadId.make("fork-board-panel");
-
 type ThreadOpener = (thread: BoardThreadInput, full: boolean) => void;
+
+const NO_SELECTION: Partial<BoardSearch> = {
+  boardItem: undefined,
+  boardPane: undefined,
+  boardEnvironmentId: undefined,
+  boardThreadId: undefined,
+};
 
 export function BoardPage() {
   const gt = useGT();
   const navigate = useNavigate();
+  const leaveBoard = useLeaveBoard();
   const search = useSearch({ from: "/_chat/board" });
   const { boardUrl } = useForkSettings();
+  const board = useBoardData(boardUrl);
   const webUrl = normalizeBoardUrl(boardUrl);
   const threads = useVisibleThreadShells();
   const projects = useProjects();
   const { environments } = useEnvironments();
-  const connectedCount = useConnectedEnvironmentIds().length;
+  const connectedIds = useConnectedEnvironmentIds();
+  const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
+
+  const data = board.data;
+  const deskColors = boardDeskColors(data);
+  const deskCounts = boardDeskCounts(data);
+  const filterDesk =
+    search.boardDesk === undefined
+      ? null
+      : (data?.desks.find((desk) => desk.slug === search.boardDesk) ?? null);
+  const filterProjectKeys = filterDesk === null ? null : deskProjectKeys(filterDesk, projects);
+  const listedThreads =
+    filterProjectKeys === null
+      ? threads
+      : threads.filter((thread) =>
+          filterProjectKeys.has(boardProjectKey(thread.environmentId, thread.projectId)),
+        );
 
   const projectNames = new Map(
     projects.map((project) => [boardProjectKey(project.environmentId, project.id), project.title]),
@@ -63,10 +101,16 @@ export function BoardPage() {
     environments.map((environment) => [environment.environmentId as string, environment.label]),
   );
   const showEnvironment = environments.length > 1;
-  const model = buildBoardModel(threads, projectNames);
+  const model = buildBoardModel(listedThreads, projectNames);
+  const items = rankBoardItems(data, filterDesk?.slug ?? null);
+  const today = collectBoardToday(data, filterDesk?.slug ?? null);
+  const readyItemCount = items.ranked.filter((row) => row.item.banner === null).length;
+  const needsMeCount = model.needsMe.length + readyItemCount;
+  const markdownEnvironmentId = connectedIds[0] ?? null;
 
   const view: BoardView =
     search.boardView === "web" && webUrl === null ? "all" : (search.boardView ?? "all");
+
   const selectedRef =
     search.boardEnvironmentId !== undefined && search.boardThreadId !== undefined
       ? scopeThreadRef(
@@ -74,10 +118,21 @@ export function BoardPage() {
           ThreadId.make(search.boardThreadId),
         )
       : null;
-  const selectedKey =
+  const selectedThreadKey =
     selectedRef === null
       ? null
       : boardThreadKey({ environmentId: selectedRef.environmentId, id: selectedRef.threadId });
+  const selectedItemKey = selectedRef === null ? (search.boardItem ?? null) : null;
+  const selectedItem = selectedItemKey === null ? null : findBoardItem(data, selectedItemKey);
+  const selectedDeskThread =
+    selectedItem === null ? null : findDeskThreadRef(selectedItem.desk, projects, threads);
+  const selectedDeskThreadRef =
+    selectedDeskThread === null
+      ? null
+      : scopeThreadRef(
+          EnvironmentId.make(selectedDeskThread.environmentId),
+          ThreadId.make(selectedDeskThread.threadId),
+        );
 
   const updateSearch = (patch: Partial<BoardSearch>) =>
     void navigate({ to: "/board", search: (previous) => ({ ...previous, ...patch }) });
@@ -93,19 +148,32 @@ export function BoardPage() {
       openFullThread(scopeThreadRef(thread.environmentId, thread.id));
       return;
     }
-    updateSearch({ boardEnvironmentId: thread.environmentId, boardThreadId: thread.id });
+    updateSearch({
+      ...NO_SELECTION,
+      boardEnvironmentId: thread.environmentId,
+      boardThreadId: thread.id,
+    });
   };
 
-  const closePanel = () =>
-    updateSearch({ boardEnvironmentId: undefined, boardThreadId: undefined });
+  const openItem = (key: string) => updateSearch({ ...NO_SELECTION, boardItem: key });
+  const closePanel = () => updateSearch(NO_SELECTION);
 
-  const rowProps = { showEnvironment, environmentLabels, selectedKey, onOpen: openThread };
+  const rowProps = {
+    showEnvironment,
+    environmentLabels,
+    selectedKey: selectedThreadKey,
+    onOpen: openThread,
+  };
 
   const needsMeSection = (
     <BoardSection
       title={gt("Needs me")}
-      count={model.needsMe.length}
-      empty={gt("Nothing is waiting on you.")}
+      count={needsMeCount}
+      empty={
+        model.needsMe.length + items.ranked.length + items.later.length === 0
+          ? gt("Nothing is waiting on you.")
+          : null
+      }
     >
       {model.needsMe.map((row) => (
         <BoardThreadRow
@@ -117,6 +185,25 @@ export function BoardPage() {
           timestamp={row.thread.updatedAt}
         />
       ))}
+      {items.ranked.map((row) => (
+        <BoardItemListRow
+          key={row.key}
+          row={row}
+          color={deskColors.get(row.desk.slug)}
+          showDesk={filterDesk === null}
+          selected={row.key === selectedItemKey}
+          onOpen={() => openItem(row.key)}
+        />
+      ))}
+      {items.later.length === 0 ? null : (
+        <LaterItems
+          rows={items.later}
+          deskColors={deskColors}
+          showDesk={filterDesk === null}
+          selectedKey={selectedItemKey}
+          onOpen={openItem}
+        />
+      )}
     </BoardSection>
   );
 
@@ -124,7 +211,7 @@ export function BoardPage() {
     <BoardSection
       title={gt("Running now")}
       count={model.running.length}
-      empty={gt("No threads are running.")}
+      empty={model.running.length === 0 ? gt("No threads are running.") : null}
     >
       {model.running.map((row) => (
         <BoardThreadRow
@@ -137,6 +224,26 @@ export function BoardPage() {
       ))}
     </BoardSection>
   );
+
+  const todaySection =
+    board.source === null ? null : (
+      <BoardSection
+        title={gt("Today", { $context: "board section, what the bots did today" })}
+        count={today.length}
+        empty={today.length === 0 ? gt("Nothing logged today yet.") : null}
+      >
+        {today.map((row) => (
+          <TodayRow
+            key={row.key}
+            row={row}
+            color={deskColors.get(row.desk.slug)}
+            showDesk={filterDesk === null}
+            time={formatShortTimestamp(row.event.t, timestampFormat)}
+            environmentId={markdownEnvironmentId}
+          />
+        ))}
+      </BoardSection>
+    );
 
   const pinnedSection =
     model.pinned.length === 0 ? null : (
@@ -152,15 +259,26 @@ export function BoardPage() {
       </BoardSection>
     );
 
+  const panelOpen = selectedRef !== null || selectedItemKey !== null;
+
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none">
       <div className="relative flex min-h-0 flex-1">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
           <WorkspacePageHeader
             electron={isElectron}
-            reserveNativeControls={selectedRef === null}
+            reserveNativeControls={!panelOpen}
             className="relative bg-background"
           >
+            <Button
+              size="sm"
+              variant="ghost"
+              className="-ml-1.5 shrink-0 [-webkit-app-region:no-drag]"
+              onClick={() => void leaveBoard()}
+            >
+              <ArrowLeftIcon />
+              <T context="leaves the board for the last open thread">Back</T>
+            </Button>
             <WorkspaceBreadcrumb ariaLabel={gt("Board breadcrumb")}>
               <WorkspaceBreadcrumbItem current>
                 <h1 className="truncate">
@@ -168,11 +286,15 @@ export function BoardPage() {
                 </h1>
               </WorkspaceBreadcrumbItem>
             </WorkspaceBreadcrumb>
-            <Badge variant="secondary" size="sm" className="hidden sm:inline-flex">
-              {connectedCount === 1
+            <Badge variant="secondary" size="sm" className="hidden shrink-0 lg:inline-flex">
+              {connectedIds.length === 1
                 ? gt("1 environment")
-                : gt("{count} environments", { count: connectedCount })}
+                : gt("{count} environments", { count: connectedIds.length })}
             </Badge>
+            <BoardSyncStatus
+              board={board}
+              onConnect={() => void navigate({ to: "/settings/labs" })}
+            />
             <div className="min-w-0 flex-1" />
             <div className="flex items-center gap-2 [-webkit-app-region:no-drag]">
               <ToggleGroup
@@ -189,28 +311,24 @@ export function BoardPage() {
                 </Toggle>
                 <Toggle value="needs-me">
                   <T>Needs me</T>
-                  <CountBadge count={model.needsMe.length} warn />
+                  <CountBadge count={needsMeCount} warn={model.needsMe.length > 0} />
                 </Toggle>
                 <Toggle value="running">
                   <T context="board filter">Running</T>
                   <CountBadge count={model.running.length} />
                 </Toggle>
+                {board.source === null ? null : (
+                  <Toggle value="today">
+                    <T context="board filter, what the bots did today">Today</T>
+                    <CountBadge count={today.length} />
+                  </Toggle>
+                )}
                 {webUrl === null ? null : (
                   <Toggle value="web">
-                    <T>Web board</T>
+                    <T context="board filter, the bot board's own web page">Web</T>
                   </Toggle>
                 )}
               </ToggleGroup>
-              {webUrl === null ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="hidden md:inline-flex"
-                  onClick={() => void navigate({ to: "/settings/labs" })}
-                >
-                  <T>Add web board</T>
-                </Button>
-              ) : null}
             </div>
           </WorkspacePageHeader>
 
@@ -221,12 +339,39 @@ export function BoardPage() {
           ) : (
             <div className="topbar-scroll-fade scrollbar-gutter-both min-h-0 flex-1 overflow-y-auto">
               <WorkspacePageContainer width="expanded" className="min-h-full gap-6">
-                {view !== "running" ? needsMeSection : null}
-                {view !== "needs-me" ? runningSection : null}
-                {view === "all" ? pinnedSection : null}
-                {view === "all" && webUrl !== null ? (
-                  <WebBoardFrame url={webUrl} className="h-160 shrink-0" />
+                {deskCounts.length > 1 ? (
+                  <ToggleGroup
+                    aria-label={gt("Filter by bot")}
+                    variant="default"
+                    size="xs"
+                    className="mx-2 flex-wrap"
+                    value={[filterDesk?.slug ?? "all"]}
+                    onValueChange={(next) => {
+                      const value = next[0];
+                      if (value === undefined) return;
+                      updateSearch({ boardDesk: value === "all" ? undefined : value });
+                    }}
+                  >
+                    <Toggle value="all" variant="pill">
+                      <T context="board filter for every bot's items">All bots</T>
+                    </Toggle>
+                    {deskCounts.map(({ desk, count }) => (
+                      <Toggle key={desk.slug} value={desk.slug} variant="pill">
+                        <span
+                          aria-hidden
+                          className="size-2 rounded-full"
+                          style={{ background: deskColors.get(desk.slug) }}
+                        />
+                        {desk.name}
+                        <span className="text-muted-foreground tabular-nums">{count}</span>
+                      </Toggle>
+                    ))}
+                  </ToggleGroup>
                 ) : null}
+                {view === "all" || view === "needs-me" ? needsMeSection : null}
+                {view === "all" || view === "running" ? runningSection : null}
+                {view === "all" || view === "today" ? todaySection : null}
+                {view === "all" ? pinnedSection : null}
               </WorkspacePageContainer>
             </div>
           )}
@@ -234,10 +379,26 @@ export function BoardPage() {
 
         {selectedRef !== null ? (
           <BoardThreadPanel
-            key={selectedKey}
+            key={selectedThreadKey}
             threadRef={selectedRef}
             onClose={closePanel}
             onOpenFull={() => openFullThread(selectedRef)}
+          />
+        ) : selectedItemKey !== null ? (
+          <BoardItemDetailPanel
+            itemKey={selectedItemKey}
+            row={selectedItem}
+            data={data}
+            deskColor={selectedItem ? deskColors.get(selectedItem.desk.slug) : undefined}
+            deskThreadRef={selectedDeskThreadRef}
+            pane={search.boardPane ?? "details"}
+            markdownEnvironmentId={markdownEnvironmentId}
+            onPaneChange={(pane: BoardItemPane) =>
+              updateSearch({ boardPane: pane === "chat" ? "chat" : undefined })
+            }
+            onSelectItem={openItem}
+            onOpenThread={openFullThread}
+            onClose={closePanel}
           />
         ) : null}
       </div>
@@ -254,9 +415,83 @@ function CountBadge({ count, warn = false }: { count: number; warn?: boolean }) 
   );
 }
 
+/** Where the bot board stands: not set up, loading, failing, or when it was last built. */
+function BoardSyncStatus(props: { board: BoardDataHandle; onConnect: () => void }) {
+  const gt = useGT();
+  const { board } = props;
+  if (board.source === null) {
+    return (
+      <Button
+        size="xs"
+        variant="outline"
+        className="hidden shrink-0 sm:inline-flex [-webkit-app-region:no-drag]"
+        onClick={props.onConnect}
+      >
+        <PlugIcon />
+        <T context="opens settings to point the board at a bot board">Connect Board</T>
+      </Button>
+    );
+  }
+  const failing = board.error !== null;
+  const details = [
+    board.error,
+    board.data?.built
+      ? gt("Built {when}", { when: new Date(board.data.built).toLocaleString() })
+      : null,
+    board.resolvedUrl,
+  ]
+    .filter((line): line is string => line !== null && line !== "")
+    .join("\n");
+  return (
+    <div className="flex shrink-0 items-center gap-0.5 [-webkit-app-region:no-drag]">
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Badge
+              size="sm"
+              variant={failing ? "warning" : "secondary"}
+              className="hidden max-w-56 sm:inline-flex"
+            />
+          }
+        >
+          <span className="truncate">
+            {board.data === null ? (
+              board.loading ? (
+                <T context="board data status">Loading board…</T>
+              ) : (
+                <T context="board data status">Board unavailable</T>
+              )
+            ) : board.data.built ? (
+              <>
+                {failing ? (
+                  <T context="board data status, followed by when it was last built">
+                    Stale, built
+                  </T>
+                ) : (
+                  <T context="board data status, followed by when it was last built">Updated</T>
+                )}{" "}
+                <RelativeTime timestamp={board.data.built} />
+              </>
+            ) : (
+              <T context="board data status">Board loaded</T>
+            )}
+          </span>
+        </TooltipTrigger>
+        <TooltipPopup side="bottom" className="max-w-96 whitespace-pre-wrap break-all">
+          {details || gt("Bot board")}
+        </TooltipPopup>
+      </Tooltip>
+      <IconAction label={gt("Refresh bot board")} onClick={board.refresh}>
+        <RefreshIcon size="sm" refreshing={board.loading} />
+      </IconAction>
+    </div>
+  );
+}
+
 function BoardSection(props: {
   title: string;
   count: number;
+  /** Shown instead of the rows; null when there are rows. */
   empty: ReactNode;
   children: ReactNode;
 }) {
@@ -266,7 +501,7 @@ function BoardSection(props: {
         {props.title}
         <span className="text-muted-foreground tabular-nums">{props.count}</span>
       </h2>
-      {props.count === 0 ? (
+      {props.empty !== null ? (
         <p className="px-3 text-muted-foreground text-sm">{props.empty}</p>
       ) : (
         <div className="flex flex-col gap-0.5">{props.children}</div>
@@ -274,6 +509,9 @@ function BoardSection(props: {
     </section>
   );
 }
+
+const ROW_CLASS =
+  "flex w-full min-w-0 items-center gap-3 rounded-md px-3 py-2 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
 
 function BoardThreadRow(props: {
   row: BoardRow;
@@ -295,10 +533,7 @@ function BoardThreadRow(props: {
     <button
       type="button"
       aria-current={selected || undefined}
-      className={cn(
-        "flex w-full min-w-0 items-center gap-3 rounded-md px-3 py-2 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-        selected && "bg-accent",
-      )}
+      className={cn(ROW_CLASS, selected && "bg-accent")}
       onClick={(event: MouseEvent) => props.onOpen(thread, opensFullThread(event))}
       onDoubleClick={() => props.onOpen(thread, true)}
     >
@@ -324,6 +559,113 @@ function BoardThreadRow(props: {
   );
 }
 
+function BoardItemListRow(props: {
+  row: BoardItemRow;
+  color: string | undefined;
+  showDesk: boolean;
+  selected: boolean;
+  onOpen: () => void;
+}) {
+  const { item, desk } = props.row;
+  return (
+    <button
+      type="button"
+      aria-current={props.selected || undefined}
+      className={cn(ROW_CLASS, props.selected && "bg-accent", item.banner !== null && "opacity-75")}
+      onClick={props.onOpen}
+    >
+      <span className="flex size-4 shrink-0 items-center justify-center">
+        <span
+          aria-hidden
+          className="size-2 rounded-full"
+          style={{ background: props.color } as CSSProperties}
+        />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="truncate font-medium text-sm">{plainBoardText(item.ask)}</span>
+        <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground text-xs">
+          {props.showDesk ? <DeskBadge desk={desk} color={props.color} /> : null}
+          <ItemTypeBadge type={item.type} />
+          <span className="truncate font-mono">{item.id}</span>
+        </span>
+      </span>
+      {item.banner === null ? null : <NotReadyBadge />}
+      <WhenBadge when={item.when} />
+      <span className="w-14 shrink-0 text-right text-muted-foreground text-xs tabular-nums">
+        {item.checked === null ? null : <RelativeTime timestamp={item.checked} />}
+      </span>
+    </button>
+  );
+}
+
+function LaterItems(props: {
+  rows: ReadonlyArray<BoardItemRow>;
+  deskColors: ReadonlyMap<string, string>;
+  showDesk: boolean;
+  selectedKey: string | null;
+  onOpen: (key: string) => void;
+}) {
+  const gt = useGT();
+  const holdsSelection = props.rows.some((row) => row.key === props.selectedKey);
+  const [open, setOpen] = useState(false);
+  const expanded = open || holdsSelection;
+  return (
+    <>
+      <button
+        type="button"
+        aria-expanded={expanded}
+        className={cn(ROW_CLASS, "py-1.5 text-muted-foreground text-xs")}
+        onClick={() => setOpen(!expanded)}
+      >
+        <span className="flex size-4 shrink-0 items-center justify-center">
+          <ChevronRightIcon
+            className={cn("size-3.5 transition-transform", expanded && "rotate-90")}
+          />
+        </span>
+        <span>{gt("{count} later", { count: props.rows.length })}</span>
+      </button>
+      {expanded
+        ? props.rows.map((row) => (
+            <BoardItemListRow
+              key={row.key}
+              row={row}
+              color={props.deskColors.get(row.desk.slug)}
+              showDesk={props.showDesk}
+              selected={row.key === props.selectedKey}
+              onOpen={() => props.onOpen(row.key)}
+            />
+          ))
+        : null}
+    </>
+  );
+}
+
+function TodayRow(props: {
+  row: BoardTodayRow;
+  color: string | undefined;
+  showDesk: boolean;
+  time: string;
+  environmentId: EnvironmentId | null;
+}) {
+  const { row } = props;
+  return (
+    <div className="flex min-w-0 items-start gap-3 rounded-md px-3 py-1.5 text-sm">
+      <span className="w-16 shrink-0 pt-px text-muted-foreground text-xs tabular-nums">
+        {props.time}
+      </span>
+      {props.showDesk ? <DeskBadge desk={row.desk} color={props.color} className="mt-px" /> : null}
+      <div className="min-w-0 flex-1 leading-snug">
+        <ChatMarkdown
+          inline
+          text={rewriteBoardThreadLinks(row.event.text)}
+          cwd={undefined}
+          environmentId={props.environmentId ?? undefined}
+        />
+      </div>
+    </div>
+  );
+}
+
 function UrgencyDot({ urgency }: { urgency: BoardUrgency }) {
   return (
     <span
@@ -341,7 +683,7 @@ function UrgencyBadge({ urgency }: { urgency: BoardUrgency }) {
     case "approval":
       return (
         <Badge variant="warning" className="shrink-0">
-          <T>Approval needed</T>
+          <T context="a live thread waits on the user's approval">Live approval</T>
         </Badge>
       );
     case "input":
@@ -394,78 +736,5 @@ function WebBoardFrame({ url, className }: { url: string; className?: string }) 
         className="min-h-0 w-full flex-1 border-0 bg-background"
       />
     </section>
-  );
-}
-
-function IconAction(props: { label: string; onClick: () => void; children: ReactNode }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button variant="ghost" size="icon-xs" aria-label={props.label} onClick={props.onClick} />
-        }
-      >
-        {props.children}
-      </TooltipTrigger>
-      <TooltipPopup side="bottom">{props.label}</TooltipPopup>
-    </Tooltip>
-  );
-}
-
-/** The selected thread beside the board, drawn by the same pane side chats use. */
-function BoardThreadPanel(props: {
-  threadRef: ScopedThreadRef;
-  onClose: () => void;
-  onOpenFull: () => void;
-}) {
-  const gt = useGT();
-  const { threadRef } = props;
-  const shell = useThreadShell(threadRef);
-  const [hostRef] = useState(() => scopeThreadRef(threadRef.environmentId, BOARD_PANEL_THREAD_ID));
-  // The board has no diff panel or terminal, so those open the thread full screen.
-  const parentPanel: SideChatParentPanel = {
-    hostRef,
-    openToolDiff: props.onOpenFull,
-    runShellCommand: props.onOpenFull,
-  };
-  const [surface] = useState(() => ({
-    id: `thread:${threadRef.threadId}` as const,
-    kind: "thread" as const,
-    threadId: threadRef.threadId,
-  }));
-  return (
-    <PreviewPanelShell
-      mode="inline"
-      widthStorageKey="t3code:fork:board-panel-width"
-      defaultWidth={typeof window === "undefined" ? 640 : Math.floor(window.innerWidth / 2)}
-      workspaceLabel={gt("Board thread panel")}
-    >
-      <div
-        className={cn(
-          "flex h-[var(--workspace-topbar-height)] shrink-0 items-center gap-1 border-b border-border pr-2 pl-3",
-          isElectron && "drag-region",
-        )}
-      >
-        <h2 className="min-w-0 flex-1 truncate font-medium text-sm">
-          {shell?.title ?? gt("Thread")}
-        </h2>
-        <div className="flex items-center gap-0.5 [-webkit-app-region:no-drag]">
-          <IconAction label={gt("Open full thread")} onClick={props.onOpenFull}>
-            <Maximize2Icon />
-          </IconAction>
-          <IconAction label={gt("Close thread panel")} onClick={props.onClose}>
-            <XIcon />
-          </IconAction>
-        </div>
-      </div>
-      <div className="min-h-0 flex-1">
-        <SideThreadPane
-          parentRef={hostRef}
-          surface={surface}
-          parentPanel={parentPanel}
-          onClose={props.onClose}
-        />
-      </div>
-    </PreviewPanelShell>
   );
 }

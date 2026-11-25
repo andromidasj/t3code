@@ -6,7 +6,7 @@ import { useSyncExternalStore } from "react";
  */
 export interface ForkSettings {
   readonly boardEnabled: boolean;
-  /** Raw text as typed; read it through normalizeBoardUrl before using it. */
+  /** Raw text as typed; read it through normalizeBoardSource or normalizeBoardUrl. */
   readonly boardUrl: string;
   readonly openBoardOnLaunch: boolean;
 }
@@ -41,6 +41,24 @@ export function normalizeBoardUrl(raw: string): string | null {
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") return null;
   return trimmed;
+}
+
+/**
+ * The trimmed board source when the desktop bridge can read it: an http(s) or file:// URL, or an
+ * absolute or ~/ path to board.py's folder, data.json or index.html. Else null.
+ */
+export function normalizeBoardSource(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (trimmed === "") return null;
+  if (trimmed.startsWith("/") || trimmed === "~" || trimmed.startsWith("~/")) return trimmed;
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  if (url.protocol === "file:") return url.pathname.length > 1 ? trimmed : null;
+  return url.protocol === "http:" || url.protocol === "https:" ? trimmed : null;
 }
 
 function parseForkSettings(raw: string | null): ForkSettings {

@@ -23,8 +23,10 @@ keeps your sign-in, settings and threads.
 4. Per-Mac settings the fork adds:
    - Settings → Keybindings: bind `chat.citeSelection` (e.g. ⌘L).
    - Settings → Appearance → Thread details: untick "Open in new threads".
-   - Settings → Labs → Customizations: the Board view, its embedded web page (any http or https
-     URL, saved on this Mac only) and whether the app opens on the Board.
+   - Settings → Labs → Customizations: the Board view, where this Mac's bot board lives (saved on
+     this Mac only) and whether the app opens on the Board. The bot board is bot-desk `board.py`'s
+     output: its web address (e.g. `https://host:8447/`) or its folder on this Mac (e.g.
+     `~/dev/bot/.board`). The desktop app reads `data.json` there, or the data `index.html` embeds.
    - Thread details limits for CLIProxyAPI threads (official since 0.1.12) come from Settings →
      Usage Providers; the hub's URL there must use the same host and port as the provider's base
      URL, or the pane says "Unavailable".
@@ -37,8 +39,8 @@ reinstalls the current release.
 - `josh/patches` is rebased onto each new stable tag (`vX.Y.Z`); one commit per patch.
 - When upstream ships an equivalent change, the patch is dropped in favour of the official one.
 - Patches stay small and client-only. Anything needing server or protocol changes is not carried.
-- Larger fork-only features live in `apps/web/src/fork/`; upstream files get only short glue edits,
-  so a rebase conflicts in a few lines at most.
+- Larger fork-only features live in `apps/web/src/fork/` and `apps/desktop/src/fork/`; upstream
+  files get only short glue edits, so a rebase conflicts in a few lines at most.
 - Builds: push tag `fork-<version>-<n>` (e.g. `fork-0.1.9-1`); `.github/workflows/fork-desktop-mac.yml`
   attaches an unsigned Apple Silicon DMG to a release. The app has no update feed.
 - Install or update on the Mac: `fork/t3-fork-update` (quits T3 Code, installs the latest fork release,
@@ -54,3 +56,4 @@ reinstalls the current release.
 | ⌘⌥←/→ switch to the next/previous right panel tab | PR #34437                  | that PR or an equivalent merges        |
 | ⌘⌥1–9 jump to a right panel tab (9 = last)        | none (fork-only)           | upstream ships tab jump shortcuts      |
 | Board view (`/board`, ⌥⇧⌘B) and per-Mac settings  | none (fork-only)           | upstream ships a cross-thread board    |
+| Board shows bot-desk items, Today and details     | none (fork-only)           | the Board patch is dropped             |

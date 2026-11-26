@@ -13,7 +13,7 @@ import { FORK_SETTINGS_STORAGE_KEY } from "./forkSettings";
 vi.mock(import("~/state/query"), async (original) => ({
   ...(await original()),
   useEnvironmentQuery: (() => ({
-    data: { tasks: [{ id: "task-backup", title: "Nightly backup" }] },
+    data: { tasks: [{ id: "task-backup", title: "Nightly backup", prompt: "Back up." }] },
     dataUpdatedAt: 0,
     error: null,
     failure: null,

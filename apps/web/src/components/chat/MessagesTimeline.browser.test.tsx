@@ -248,7 +248,9 @@ async function click(element: HTMLElement) {
   await act(async () => element.click());
 }
 
-function setup({ scheduledTasks = [] as ReadonlyArray<{ id: string; title: string }> } = {}) {
+function setup({
+  scheduledTasks = [] as ReadonlyArray<{ id: string; title: string; prompt: string }>,
+} = {}) {
   environmentQuery.error = "Pull request not found";
   environmentQuery.data = { tasks: scheduledTasks };
 }
@@ -1638,7 +1640,9 @@ describe("MessagesTimeline citations", () => {
 
 describe("MessagesTimeline automation prompts", () => {
   it("folds an automation prompt into a bubble titled by its task", async () => {
-    setup({ scheduledTasks: [{ id: TASK_ID, title: "Nightly triage" }] });
+    setup({
+      scheduledTasks: [{ id: TASK_ID, title: "Nightly triage", prompt: AUTOMATION_PROMPT }],
+    });
     await using screen = await renderTimeline([
       message(AUTOMATION_PROMPT, { scheduledTaskId: TASK_ID }),
     ]);

@@ -13,6 +13,8 @@ import type {
 } from "~/components/chat/MessagesTimeline.logic";
 import type { WorkLogEntry } from "~/session-logic";
 
+import { parseScheduledDeliveryMode } from "./scheduledDelivery";
+
 /**
  * Routine agent-to-agent and automation turns in a thread fold into one strip, so the
  * conversation with the user stays readable. Works on the rows MessagesTimeline already derived.
@@ -57,6 +59,8 @@ export interface AgentTurnFoldingContext {
   readonly isWorking?: boolean | undefined;
   /** Message or row ids that must stay visible, such as a cited response. */
   readonly pinnedIds?: ReadonlySet<string> | undefined;
+  /** Ids of scheduled tasks whose prompt asks for `always` delivery, once the live list loaded. */
+  readonly alwaysTaskIds?: ReadonlySet<string> | undefined;
   readonly onToggle?: ((foldId: string) => void) | undefined;
 }
 
@@ -231,9 +235,34 @@ function needsUser(turn: TimelineTurn, context: AgentTurnFoldingContext): boolea
   );
 }
 
-/** A bot reply that starts with 👉 or says "👉 Needs you" is meant for the user. */
+/** A bot reply with 👉 or a ⚠️ warning anywhere in it is meant for the user. */
 export function flagsUser(text: string): boolean {
-  return text.trimStart().startsWith("👉") || text.includes("👉 Needs you");
+  return text.includes("👉") || text.includes("⚠️");
+}
+
+/** Inline visuals, messages sent to the user, and media or file attachments are never routine. */
+function hasVisualContent(turn: TimelineTurn): boolean {
+  return turn.rows.some(
+    (row) =>
+      row.kind === "html-render" ||
+      row.kind === "mcp-app" ||
+      row.kind === "viewed-images" ||
+      row.kind === "sent-message" ||
+      (row.kind === "message" &&
+        row.message.role === "assistant" &&
+        (row.message.attachments?.length ?? 0) > 0),
+  );
+}
+
+/** A scheduled job set to deliver `always` is never folded away. */
+function isAlwaysDelivery(turn: TimelineTurn, context: AgentTurnFoldingContext): boolean {
+  const sender = agentTurnSender(turn.opener);
+  if (sender?.kind !== "automation") return false;
+  if (parseScheduledDeliveryMode(turn.opener.message.text) === "always") return true;
+  return (
+    sender.scheduledTaskId !== undefined &&
+    context.alwaysTaskIds?.has(sender.scheduledTaskId) === true
+  );
 }
 
 function isPinned(turn: TimelineTurn, pinnedIds: ReadonlySet<string> | undefined): boolean {
@@ -255,6 +284,8 @@ function isRoutineAgentTurn(
   if (isActive(turn, isLast, context)) return false;
   if (isFailed(turn, context)) return false;
   if (needsUser(turn, context)) return false;
+  if (isAlwaysDelivery(turn, context)) return false;
+  if (hasVisualContent(turn)) return false;
   if (
     turn.rows.some(
       (row) =>

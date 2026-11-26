@@ -18,6 +18,7 @@ import { __setClientSettingsForTests, getClientSettings } from "~/hooks/useSetti
 import { useThreadRouteTarget } from "~/hooks/useThreadRouteTarget";
 import { readLocalApi } from "~/localApi";
 import { useProjects, useQuietThreadShells } from "~/state/entities";
+import { useUiStateStore } from "~/uiStateStore";
 import { makeThreadFixture } from "~/test-fixtures";
 import type { Project } from "~/types";
 
@@ -198,12 +199,22 @@ describe("Bot Dock", () => {
       tileElement("chief").querySelector('[data-testid="bot-dock-ring-working"]'),
     ).not.toBeNull();
 
-    // Needs me dims what is not waiting on the user, without moving the grid.
-    const before = tileElement("penny").getBoundingClientRect();
+    // Needs me hides what is not waiting on the user, and the rest re-centers.
     await userEvent.click(page.getByRole("button", { name: /Needs me/ }));
-    await vi.waitFor(() => expect(tileElement("penny").dataset.dimmed).toBe("true"));
-    expect(tileElement("mortie").dataset.dimmed).toBeUndefined();
-    expect(tileElement("penny").getBoundingClientRect()).toEqual(before);
+    await vi.waitFor(() =>
+      expect(document.querySelector(`[data-testid="${tileId("penny")}"]`)).toBeNull(),
+    );
+    const dock = document.querySelector<HTMLElement>('[data-testid="bot-dock"]')!;
+    expect([...dock.children].map((element) => (element as HTMLElement).dataset.testid)).toEqual([
+      tileId("mortie"),
+    ]);
+    const center = (rect: DOMRect) => rect.left + rect.width / 2;
+    expect(
+      Math.abs(
+        center(tileElement("mortie").getBoundingClientRect()) -
+          center(dock.getBoundingClientRect()),
+      ),
+    ).toBeLessThan(2);
   });
 
   it("scopes to a topic desk, follows delegated lanes, and toggles back", async () => {
@@ -220,7 +231,7 @@ describe("Bot Dock", () => {
     // A topic desk scopes the list and opens its latest thread.
     await userEvent.click(tile("chief").getByRole("button", { name: /^Chief/ }));
     await vi.waitFor(() => expect(tileElement("chief").dataset.selected).toBe("true"));
-    expect(tileElement("penny").dataset.dimmed).toBe("true");
+    expect(document.querySelector(`[data-testid="${tileId("penny")}"]`)).toBeNull();
     await vi.waitFor(() => expect(listText()).not.toContain("Loose thread"));
     expect(navigate).toHaveBeenLastCalledWith(
       expect.objectContaining({ params: expect.objectContaining({ threadId: "Chief topic" }) }),
@@ -230,8 +241,9 @@ describe("Bot Dock", () => {
     await expect.element(page.getByText("Loose thread")).toBeInTheDocument();
 
     // Scoping to Eagle Eye keeps its lane, delegated into another project.
+    const show = vi.fn(async () => "filter");
     vi.mocked(readLocalApi).mockReturnValue({
-      contextMenu: { show: vi.fn(async () => "filter"), close: vi.fn() },
+      contextMenu: { show, close: vi.fn() },
     } as unknown as LocalApi);
     stack.defer(() => vi.mocked(readLocalApi).mockRestore());
     tileElement("eagle")
@@ -241,15 +253,23 @@ describe("Bot Dock", () => {
     await expect.element(page.getByText("Eagle lane in Loose")).toBeInTheDocument();
     await vi.waitFor(() => expect(listText()).not.toContain("Loose thread"));
 
-    // A main thread's tile opens it and clears a scope that would hide it.
+    expect(document.querySelector(`[data-testid="${tileId("penny")}"]`)).toBeNull();
+
+    // Show all projects brings the other tiles and threads back.
+    show.mockResolvedValue("show-all");
+    tileElement("eagle")
+      .querySelector("button")!
+      .dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 10 }));
+    await vi.waitFor(() => expect(tileElement("eagle").dataset.selected).toBeUndefined());
+    await expect.element(page.getByText("Loose thread")).toBeInTheDocument();
+
+    // A main thread's tile opens it.
     await userEvent.click(tile("penny").getByRole("button", { name: /^Penny/ }));
     expect(navigate).toHaveBeenLastCalledWith(
       expect.objectContaining({
         params: expect.objectContaining({ threadId: "Penny main thread" }),
       }),
     );
-    await vi.waitFor(() => expect(tileElement("eagle").dataset.selected).toBeUndefined());
-    await expect.element(page.getByText("Loose thread")).toBeInTheDocument();
   });
 
   it("starts a thread from the + button and marks the open main thread", async () => {
@@ -277,6 +297,38 @@ describe("Bot Dock", () => {
     expect(handleNewThread).toHaveBeenCalledWith(scopeProjectRef(bots, chief.id));
     // The tile's own click did not run: nothing was scoped.
     expect(tileElement("chief").dataset.selected).toBeUndefined();
+  });
+
+  it("keeps a picked saved view while the open thread sits in the dock", async () => {
+    using stack = new DisposableStack();
+    await renderSidebar(stack);
+    updateForkSettings({
+      sidebarFilterPresets: [
+        { id: "chief-view", name: "Chief view", projectKeys: [`${bots}:/projects/chief`] },
+      ],
+    });
+    stack.defer(() => useUiStateStore.getState().setSidebarProjectScopeKeys([]));
+    stack.defer(() => vi.mocked(useThreadRouteTarget).mockRestore());
+    vi.mocked(useThreadRouteTarget).mockReturnValue({
+      kind: "server",
+      threadRef: scopeThreadRef(bots, pennyMain.id),
+    });
+    const reveal = { observedKey: null, pendingKey: null };
+    await using _screen = await render(
+      <SidebarProvider>
+        <Sidebar routeReveal={reveal} />
+      </SidebarProvider>,
+    );
+    await expect.element(page.getByText("Loose thread")).toBeInTheDocument();
+    await userEvent.click(page.getByRole("button", { name: "Chief view" }));
+    await vi.waitFor(() => expect(listText()).not.toContain("Loose thread"));
+    // The open main thread has no row to reveal; picking the view settles its reveal, so
+    // nothing widens the view back to all projects.
+    expect(reveal.pendingKey).toBeNull();
+    await expect
+      .element(page.getByRole("button", { name: "Chief view" }))
+      .toHaveAttribute("aria-pressed", "true");
+    expect(listText()).not.toContain("Loose thread");
   });
 
   it("is gone when turned off, and the Pinned list is upstream's", async () => {

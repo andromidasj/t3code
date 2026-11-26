@@ -6,7 +6,6 @@ import {
   type EnvironmentId,
   type ProviderInstanceId,
   type ScopedProjectRef,
-  type ThreadId,
 } from "@t3tools/contracts";
 
 import {
@@ -22,6 +21,7 @@ import {
   sidebarThreadKey,
   threadNeedsMe,
   type SidebarFilterLens,
+  type SidebarHierarchyThread,
   type SidebarHierarchyView,
   type SidebarPartitionLists,
 } from "./sidebarHierarchy";
@@ -53,7 +53,8 @@ export interface BotDockTile<T extends BotDockThread, G extends BotDockGroup> {
   /** A topic desk's live threads; null for a main-thread bot or a desk with none. */
   readonly topicCount: number | null;
   readonly selected: boolean;
-  readonly dimmed: boolean;
+  /** Outside Needs me or the project scope; the dock leaves it out. */
+  readonly hidden: boolean;
   /** Every live thread the tile rolls up, its delegated lanes included. */
   readonly threadKeys: ReadonlySet<string>;
 }
@@ -85,7 +86,7 @@ function activityMs(thread: BotDockThread): number {
 }
 
 /** Listed in the sidebar's Pinned, Active or Working: not archived, settled or snoozed. */
-function isLiveThread(thread: BotDockThread, now: string): boolean {
+export function isLiveThread(thread: BotDockThread, now: string): boolean {
   return (
     thread.archivedAt === null &&
     thread.settledOverride !== "settled" &&
@@ -179,7 +180,7 @@ export function buildBotDock<T extends BotDockThread, G extends BotDockGroup>(in
           input.routeThreadKey !== null &&
           sidebarThreadKey(mainThread) === input.routeThreadKey) ||
         scopedOnly === group.projectKey,
-      dimmed:
+      hidden:
         (input.lens === "needs-me" && status !== "needs") ||
         (input.projectScopeKeys.length > 0 && !input.projectScopeKeys.includes(group.projectKey)),
       threadKeys: new Set(rolled.map(sidebarThreadKey)),
@@ -219,22 +220,51 @@ export function scopeForNewThread(
   return projectScopeKeys.length > 0 && !projectScopeKeys.includes(key) ? [] : null;
 }
 
-/** The Pinned list without the main threads the dock already shows; search still finds them. */
-export function withoutDockedPinnedThreads<
-  T extends { readonly environmentId: EnvironmentId; readonly id: ThreadId },
-  P extends Pick<SidebarPartitionLists<T>, "pinnedThreads">,
-  V extends Pick<SidebarHierarchyView<T>, "hiddenThreads">,
->(partition: P & { readonly forkHierarchy: V }, mainThreadKeys: ReadonlySet<string>) {
-  if (mainThreadKeys.size === 0) return partition;
-  const docked = (thread: T) => mainThreadKeys.has(sidebarThreadKey(thread));
-  const hidden = partition.pinnedThreads.filter(docked);
-  if (hidden.length === 0) return partition;
+/**
+ * The list without the threads the dock or a Space's grid already shows, from every section and
+ * the Bot / Background drawer; search still finds them.
+ */
+export function withoutThreadsShownAbove<
+  T extends SidebarHierarchyThread,
+  P extends SidebarPartitionLists<T>,
+  V extends SidebarHierarchyView<T>,
+>(partition: P & { readonly forkHierarchy: V }, shownKeys: ReadonlySet<string>) {
+  if (shownKeys.size === 0) return partition;
+  const shown = (thread: T) => shownKeys.has(sidebarThreadKey(thread));
+  const hidden: T[] = [];
+  const strip = (threads: readonly T[]): readonly T[] => {
+    if (!threads.some(shown)) return threads;
+    hidden.push(...threads.filter(shown));
+    return threads.filter((thread) => !shown(thread));
+  };
+  const view = partition.forkHierarchy;
+  const drawerThreads = view.drawer?.threads.filter((thread) => !shown(thread)) ?? [];
+  const drawer =
+    view.drawer === null || drawerThreads.length === 0
+      ? null
+      : {
+          ...view.drawer,
+          threads: drawerThreads,
+          listed: view.drawer.listed.filter((thread) => !shown(thread)),
+          failedCount: drawerThreads.filter((thread) => thread.latestRun?.status === "failed")
+            .length,
+          runningCount: drawerThreads.filter(isThreadRunning).length,
+        };
   return {
     ...partition,
-    pinnedThreads: partition.pinnedThreads.filter((thread) => !docked(thread)),
+    pinnedThreads: strip(partition.pinnedThreads),
+    activeThreads: strip(partition.activeThreads),
+    workingThreads: strip(partition.workingThreads),
+    snoozedThreads: strip(partition.snoozedThreads),
+    settledThreads: strip(partition.settledThreads),
     forkHierarchy: {
-      ...partition.forkHierarchy,
-      hiddenThreads: [...partition.forkHierarchy.hiddenThreads, ...hidden],
+      ...view,
+      drawer,
+      botRowKeys:
+        view.botRowKeys.size === 0
+          ? view.botRowKeys
+          : new Set([...view.botRowKeys].filter((key) => !shownKeys.has(key))),
+      hiddenThreads: [...view.hiddenThreads, ...hidden],
     },
   };
 }

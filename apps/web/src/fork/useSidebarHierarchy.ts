@@ -2,7 +2,7 @@ import * as Schema from "effect/Schema";
 
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 
-import { withoutDockedPinnedThreads } from "./botDock.logic";
+import { withoutThreadsShownAbove } from "./botDock.logic";
 import { useForkSettings } from "./forkSettings";
 import {
   applySidebarHierarchy,
@@ -36,7 +36,7 @@ export type ForkSidebarHierarchy<T> = SidebarHierarchyView<T> & {
 
 /**
  * The sidebar's partition with this Mac's filter applied; upstream's when the hierarchy is off.
- * Main threads the Bot Dock shows leave the Pinned list.
+ * Threads the Bot Dock or the Space's grid shows leave the list.
  */
 export function useForkSidebarHierarchy<
   T extends SidebarHierarchyThread,
@@ -44,7 +44,7 @@ export function useForkSidebarHierarchy<
 >(
   partition: P & SidebarPartitionLists<T>,
   routeThreadKey: string | null,
-  dockedMainThreadKeys: ReadonlySet<string>,
+  shownAboveThreadKeys: ReadonlySet<string>,
 ): P & { readonly forkHierarchy: ForkSidebarHierarchy<T> } {
   const { sidebarHierarchyEnabled } = useForkSettings();
   const [lens] = useSidebarLens();
@@ -53,14 +53,14 @@ export function useForkSidebarHierarchy<
     false,
     Schema.Boolean,
   );
-  const result = withoutDockedPinnedThreads(
+  const result = withoutThreadsShownAbove(
     applySidebarHierarchy<T, P>(partition, {
       enabled: sidebarHierarchyEnabled,
       lens,
       botExpanded,
       routeThreadKey,
     }),
-    dockedMainThreadKeys,
+    shownAboveThreadKeys,
   );
   return {
     ...result,
@@ -79,7 +79,7 @@ export function useForkLineageScope(
   threads: ReadonlyArray<LineageThread>,
   scopedProjectKeys: ReadonlySet<string> | null,
 ): ReadonlySet<string> | null {
-  const { sidebarHierarchyEnabled, botDockEnabled } = useForkSettings();
-  if (!sidebarHierarchyEnabled && !botDockEnabled) return null;
+  const { sidebarHierarchyEnabled, botDockEnabled, spacesEnabled } = useForkSettings();
+  if (!sidebarHierarchyEnabled && !botDockEnabled && !spacesEnabled) return null;
   return resolveLineageScopedThreadKeys(threads, scopedProjectKeys);
 }

@@ -30,9 +30,11 @@ export interface ForkSettings {
   readonly sidebarPages: ReadonlyArray<SidebarPage>;
   /** Fold routine agent-to-agent and automation turns in a thread into one strip. */
   readonly collapseAgentTurns: boolean;
-  /** The sidebar's All / Mine / Needs me filter and its Bot / Background drawer. */
+  /** The sidebar's All / Needs me filter and its Bot / Background drawer. */
   readonly sidebarHierarchyEnabled: boolean;
   readonly sidebarFilterPresets: ReadonlyArray<SidebarFilterPreset>;
+  /** Pinned projects as an avatar grid at the top of the sidebar. */
+  readonly botDockEnabled: boolean;
 }
 
 export const FORK_SETTINGS_STORAGE_KEY = "t3code:fork:settings:v1";
@@ -45,6 +47,7 @@ export const DEFAULT_FORK_SETTINGS: ForkSettings = {
   collapseAgentTurns: true,
   sidebarHierarchyEnabled: true,
   sidebarFilterPresets: [],
+  botDockEnabled: true,
 };
 
 type ForkSettingsStorage = Pick<Storage, "getItem" | "setItem">;
@@ -195,6 +198,10 @@ function parseForkSettings(raw: string | null): ForkSettings {
         ? record.sidebarHierarchyEnabled
         : DEFAULT_FORK_SETTINGS.sidebarHierarchyEnabled,
     sidebarFilterPresets: normalizeSidebarFilterPresets(record.sidebarFilterPresets),
+    botDockEnabled:
+      typeof record.botDockEnabled === "boolean"
+        ? record.botDockEnabled
+        : DEFAULT_FORK_SETTINGS.botDockEnabled,
   };
 }
 

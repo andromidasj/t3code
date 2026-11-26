@@ -75,7 +75,7 @@ const threads = [
 ];
 
 describe("sidebar filter and Bot / Background drawer", () => {
-  it("separates bot threads into a drawer and filters by All, Mine and Needs me", async () => {
+  it("separates bot threads into a drawer and filters by All and Needs me", async () => {
     using stack = new DisposableStack();
     const previousSettings = getClientSettings();
     stack.defer(() => __setClientSettingsForTests(previousSettings));
@@ -84,6 +84,8 @@ describe("sidebar filter and Bot / Background drawer", () => {
     stack.defer(() => updateForkSettings(DEFAULT_FORK_SETTINGS));
     stack.defer(() => localStorage.removeItem("t3code:fork:sidebar-lens"));
     stack.defer(() => localStorage.removeItem("t3code:fork:sidebar-bot-expanded"));
+    // A Mac upgrading from a build that still had Mine.
+    localStorage.setItem("t3code:fork:sidebar-lens", '"mine"');
     vi.mocked(useProjects).mockReturnValue([project]);
     vi.mocked(useQuietThreadShells).mockReturnValue(threads);
     vi.mocked(useHandleNewThread).mockReturnValue({
@@ -103,6 +105,9 @@ describe("sidebar filter and Bot / Background drawer", () => {
     );
 
     await expect.element(screen.getByText("My own thread")).toBeInTheDocument();
+    await expect
+      .element(screen.getByRole("button", { name: "All", exact: true }))
+      .toHaveAttribute("aria-pressed", "true");
     await expect.element(screen.getByText("👉 Pick a flight")).toBeInTheDocument();
     const drawerToggle = screen.getByTestId("sidebar-bot-shelf-toggle");
     await vi.waitFor(() =>
@@ -131,12 +136,7 @@ describe("sidebar filter and Bot / Background drawer", () => {
     await userEvent.click(drawerToggle);
     await vi.waitFor(() => expect(document.body.textContent).not.toContain("Nightly scan"));
 
-    await userEvent.click(screen.getByRole("button", { name: "Mine", exact: true }));
-    await vi.waitFor(() =>
-      expect(document.querySelector('[data-testid="sidebar-bot-header"]')).toBeNull(),
-    );
-    await expect.element(screen.getByText("My own thread")).toBeInTheDocument();
-    await expect.element(screen.getByText("👉 Pick a flight")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mine", exact: true }).query()).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: /Needs me/ }));
     await vi.waitFor(() => expect(document.body.textContent).not.toContain("My own thread"));
@@ -191,7 +191,7 @@ describe("sidebar filter and Bot / Background drawer", () => {
     // Every filter option shows its whole label, the count included.
     const bar = document.querySelector<HTMLElement>('[data-testid="sidebar-filter-bar"]')!;
     const toggles = [...bar.querySelectorAll<HTMLElement>('[data-slot="toggle"]')];
-    expect(toggles).toHaveLength(3);
+    expect(toggles).toHaveLength(2);
     for (const toggle of toggles)
       expect(toggle.scrollWidth).toBeLessThanOrEqual(toggle.clientWidth);
 

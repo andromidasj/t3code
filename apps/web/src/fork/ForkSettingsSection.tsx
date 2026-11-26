@@ -106,7 +106,7 @@ export function ForkSettingsSection() {
         devicePreference
         title={gt("Sidebar filter and Bot / Background")}
         description={gt(
-          "Show All, Mine and Needs me above the thread list, and fold threads bots started on their own (that you never wrote in) into a collapsible Bot / Background section.",
+          "Show All and Needs me above the thread list, and fold threads bots started on their own (that you never wrote in) into a collapsible Bot / Background section.",
         )}
         control={
           <Switch
@@ -115,6 +115,20 @@ export function ForkSettingsSection() {
               updateForkSettings({ sidebarHierarchyEnabled: Boolean(checked) })
             }
             aria-label={gt("Sidebar filter and Bot / Background")}
+          />
+        }
+      />
+      <SettingsRow
+        devicePreference
+        title={gt("Bot Dock (pinned projects grid)")}
+        description={gt(
+          "Shows pinned projects in an avatar grid at the top of the sidebar; pin projects from the project menu.",
+        )}
+        control={
+          <Switch
+            checked={settings.botDockEnabled}
+            onCheckedChange={(checked) => updateForkSettings({ botDockEnabled: Boolean(checked) })}
+            aria-label={gt("Bot Dock (pinned projects grid)")}
           />
         }
       />

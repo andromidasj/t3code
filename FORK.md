@@ -30,11 +30,20 @@ keeps your sign-in, settings and threads.
      `~/dev/bot/.board`). The desktop app reads `data.json` there, or the data `index.html` embeds.
      "Collapse routine bot updates" (on by default) folds finished agent-to-agent and scheduled
      turns into one "Bot activity" strip; running, failed, waiting and 👉 turns stay open.
-     "Sidebar filter and Bot / Background" (on by default) adds All | Mine | Needs me under the
+     "Sidebar filter and Bot / Background" (on by default) adds All | Needs me under the
      sidebar's pages and folds threads bots started that you never wrote in (no 👉 title, nothing
      waiting on you) into a collapsible Bot / Background shelf above Snoozed and Settled. Shift-,
      ⌘- or Ctrl-click in the sidebar's project menu picks several projects; with projects
-     picked, "Save view" keeps that set as a chip; rename or delete views here.
+     picked, "Save view" keeps that set as a chip; rename or delete views here. A project scope
+     (menu, view or dock) also lists threads delegated or spawned from its threads, across
+     environments (`delegatedFrom`, `lineage.parentThreadId`).
+     "Bot Dock (pinned projects grid)" (on by default) shows pinned projects as avatars, three
+     across, above that filter: provider badge, a blue arc while working, an amber ring when one
+     needs you, a blue dot when unread, a thread count on topic desks. A project's top pinned
+     thread is its main thread: the tile opens it and the Pinned list leaves it out. A desk with
+     no pinned thread filters the sidebar to itself and opens its latest thread; click again
+     for all projects. Hover shows + for a new thread; right-click to filter or unpin. Pin a
+     project from the project menu to dock it.
    - Board: the header's View and Group menus pick what shows. Needs me counts live threads
      waiting on you plus ready bot-desk items, the same number as the sidebar's Board button and
      the bot chips; items not ready yet and later ones fold below it. Group (kept on this Mac)
@@ -80,5 +89,6 @@ reinstalls the current release.
 | Board right panel, sidebar pages, "Open in" desk  | none (fork-only)           | the Board patch is dropped             |
 | Collapse routine bot updates in threads           | none (fork-only)           | upstream folds agent-to-agent turns    |
 | Scheduled task delivery modes                     | none (fork-only)           | upstream ships per-task notify modes   |
-| Sidebar All/Mine/Needs me, Bot / Background       | none (fork-only)           | upstream separates bot threads         |
+| Sidebar All/Needs me, Bot / Background            | none (fork-only)           | upstream separates bot threads         |
 | Scheduled jobs health on the Board (Jobs)         | none (fork-only)           | the Board patch is dropped             |
+| Bot Dock; project scope follows delegated threads | none (fork-only)           | upstream ships a pinned-project dock   |

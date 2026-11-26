@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react";
 
+import { normalizeSidebarSpaces, type SidebarSpace } from "./spaces.logic";
+
 /**
  * Fork-only preferences. They stay in this Mac's localStorage, never in server settings, so one
  * build can serve several Macs that each point at their own board.
@@ -35,6 +37,12 @@ export interface ForkSettings {
   readonly sidebarFilterPresets: ReadonlyArray<SidebarFilterPreset>;
   /** Pinned projects as an avatar grid at the top of the sidebar. */
   readonly botDockEnabled: boolean;
+  /** Arc-style Spaces: the sidebar shows one set of projects at a time, with a pinned grid each. */
+  readonly spacesEnabled: boolean;
+  /** Empty until the first change; the sidebar then shows one Home Space with every project. */
+  readonly spaces: ReadonlyArray<SidebarSpace>;
+  readonly defaultSpaceId: string | null;
+  readonly activeSpaceId: string | null;
 }
 
 export const FORK_SETTINGS_STORAGE_KEY = "t3code:fork:settings:v1";
@@ -48,6 +56,10 @@ export const DEFAULT_FORK_SETTINGS: ForkSettings = {
   sidebarHierarchyEnabled: true,
   sidebarFilterPresets: [],
   botDockEnabled: true,
+  spacesEnabled: true,
+  spaces: [],
+  defaultSpaceId: null,
+  activeSpaceId: null,
 };
 
 type ForkSettingsStorage = Pick<Storage, "getItem" | "setItem">;
@@ -202,6 +214,13 @@ function parseForkSettings(raw: string | null): ForkSettings {
       typeof record.botDockEnabled === "boolean"
         ? record.botDockEnabled
         : DEFAULT_FORK_SETTINGS.botDockEnabled,
+    spacesEnabled:
+      typeof record.spacesEnabled === "boolean"
+        ? record.spacesEnabled
+        : DEFAULT_FORK_SETTINGS.spacesEnabled,
+    spaces: normalizeSidebarSpaces(record.spaces),
+    defaultSpaceId: typeof record.defaultSpaceId === "string" ? record.defaultSpaceId : null,
+    activeSpaceId: typeof record.activeSpaceId === "string" ? record.activeSpaceId : null,
   };
 }
 

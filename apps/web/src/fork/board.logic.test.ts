@@ -329,6 +329,10 @@ describe("fork settings storage", () => {
       sidebarHierarchyEnabled: true,
       sidebarFilterPresets: [],
       botDockEnabled: true,
+      spacesEnabled: true,
+      spaces: [],
+      defaultSpaceId: null,
+      activeSpaceId: null,
     };
     expect(readForkSettings(storage)).toEqual(expected);
     expect(JSON.parse(storage.values.get(FORK_SETTINGS_STORAGE_KEY) ?? "null")).toEqual(expected);

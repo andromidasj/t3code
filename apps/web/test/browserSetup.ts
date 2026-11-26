@@ -28,6 +28,7 @@ beforeEach(async () => {
       collapseAgentTurns: false,
       sidebarHierarchyEnabled: false,
       botDockEnabled: false,
+      spacesEnabled: false,
     }),
   );
 });

@@ -35,7 +35,7 @@ export function SidebarFilterBar(props: {
   readonly onProjectScopeChange: (keys: readonly string[]) => void;
 }) {
   const gt = useGT();
-  const { sidebarHierarchyEnabled, sidebarFilterPresets } = useForkSettings();
+  const { sidebarHierarchyEnabled, sidebarFilterPresets, spacesEnabled } = useForkSettings();
   const [lens, setLens] = useSidebarLens();
   if (!sidebarHierarchyEnabled || props.hidden) return null;
   const { projectScopeKeys } = props;
@@ -80,7 +80,8 @@ export function SidebarFilterBar(props: {
           </Toggle>
         </ToggleGroup>
       </div>
-      {sidebarFilterPresets.length > 0 || canSave ? (
+      {/* Spaces replace saved views. */}
+      {!spacesEnabled && (sidebarFilterPresets.length > 0 || canSave) ? (
         <SidebarProjectViews
           presets={sidebarFilterPresets}
           projectScopeKeys={projectScopeKeys}

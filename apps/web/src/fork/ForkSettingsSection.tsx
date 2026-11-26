@@ -132,6 +132,20 @@ export function ForkSettingsSection() {
           />
         }
       />
+      <SettingsRow
+        devicePreference
+        title={gt("Arc-style Spaces sidebar")}
+        description={gt(
+          "Organize projects into swipeable Spaces with a per-Space pinned thread grid (Ctrl+1–9). Replaces saved views and the project menu while on.",
+        )}
+        control={
+          <Switch
+            checked={settings.spacesEnabled}
+            onCheckedChange={(checked) => updateForkSettings({ spacesEnabled: Boolean(checked) })}
+            aria-label={gt("Arc-style Spaces sidebar")}
+          />
+        }
+      />
       {settings.sidebarFilterPresets.length > 0 ? (
         <SettingsRow
           devicePreference

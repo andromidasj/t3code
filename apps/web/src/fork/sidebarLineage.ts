@@ -66,6 +66,26 @@ export function lineageProjectKeys<T extends LineageThread>(
   return projectKeys;
 }
 
+/** The keys of every ancestor this client knows, nearest first. Cycles end the walk. */
+export function lineageAncestorKeys<T extends LineageThread>(
+  thread: T,
+  index: LineageIndex<T>,
+): string[] {
+  const ancestors: string[] = [];
+  const visited = new Set<string>([threadKeyOf(thread.environmentId, thread.id)]);
+  const queue = parentKeys(thread, index);
+  while (queue.length > 0) {
+    const key = queue.shift()!;
+    if (visited.has(key)) continue;
+    visited.add(key);
+    const ancestor = index.get(key);
+    if (ancestor === undefined) continue;
+    ancestors.push(key);
+    queue.push(...parentKeys(ancestor, index));
+  }
+  return ancestors;
+}
+
 /**
  * The thread keys a project scope lists: threads in a scoped project, and threads delegated or
  * spawned from one (a coding lane on another environment, its subagents). Null for no scope.

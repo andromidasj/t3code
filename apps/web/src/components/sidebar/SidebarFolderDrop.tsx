@@ -8,7 +8,7 @@ import { useGT } from "gt-react";
 import { useState, type DragEvent, type ReactNode } from "react";
 
 import { useOpenLocalWorkspace } from "../../hooks/useOpenLocalWorkspace";
-import { randomUUID } from "../../lib/utils";
+import { cn, randomUUID } from "../../lib/utils";
 import { resolveDroppedFolderPath } from "../chat/folderDrop";
 import { splitTransferredFiles } from "../chat/workspaceFileDrop";
 import { setFileDragActive } from "../Sidebar.logic";
@@ -27,7 +27,7 @@ function isFileDrag(event: DragEvent) {
  * this zone then stays hidden and only picks up folders from the drop.
  * Browsers expose no absolute paths, so only the desktop app can add them.
  */
-export function SidebarFolderDrop(props: { children: ReactNode }) {
+export function SidebarFolderDrop(props: { children: ReactNode; className?: string | undefined }) {
   const gt = useGT();
   const [isActive, setIsActive] = useState(false);
   const openLocalWorkspace = useOpenLocalWorkspace();
@@ -95,7 +95,7 @@ export function SidebarFolderDrop(props: { children: ReactNode }) {
 
   return (
     <div
-      className="relative flex min-h-0 flex-1 flex-col"
+      className={cn("relative flex min-h-0 flex-1 flex-col", props.className)}
       onDragEnter={onDragOver}
       onDragOver={onDragOver}
       onDragLeave={(event) => {

@@ -40,12 +40,13 @@ export function useBotDock(input: {
   readonly routeThreadKey: string | null;
   readonly projectScopeKeys: ReadonlyArray<string>;
 }): BotDockModel<DockThread, DockGroup> {
-  const { botDockEnabled, sidebarHierarchyEnabled } = useForkSettings();
+  const { botDockEnabled, sidebarHierarchyEnabled, spacesEnabled } = useForkSettings();
   const [lens] = useSidebarLens();
   // `YYYY-MM-DDTHH:mm` in UTC; the dock only needs snooze wakes to the minute.
   const nowMinute = useNowMinute();
   const localLastVisitedAt = useUiStateStore((store) => store.threadLastVisitedAtById);
-  if (!botDockEnabled) return emptyBotDock();
+  // Spaces replace the dock with their own grid of pinned threads.
+  if (!botDockEnabled || spacesEnabled) return emptyBotDock();
   return buildBotDock({
     ...input,
     lens: sidebarHierarchyEnabled ? lens : null,
@@ -76,7 +77,7 @@ export interface BotDockProps {
 /** Pinned projects as avatars above the sidebar's filter. */
 export function BotDock(props: BotDockProps) {
   const gt = useGT();
-  const { tiles } = props.dock;
+  const tiles = props.dock.tiles.filter((tile) => !tile.hidden);
   if (tiles.length === 0) return null;
   const startThread = (group: DockGroup) => {
     const scope = scopeForNewThread(group.projectKey, props.projectScopeKeys);
@@ -233,14 +234,12 @@ function BotDockTileView(props: {
     <div
       data-testid={`bot-dock-tile-${group.projectKey}`}
       data-selected={tile.selected || undefined}
-      data-dimmed={tile.dimmed || undefined}
       data-status={tile.status}
       className={cn(
-        "group/tile relative w-[calc((100%-1rem)/3)] rounded-xl transition-[background-color,opacity,filter] duration-200",
+        "group/tile relative w-[calc((100%-1rem)/3)] rounded-xl transition-colors duration-200",
         TILE_BG_CLASS,
         tile.selected &&
           "bg-sidebar-row-selected [--tile-bg:var(--sidebar-row-selected)] ring-1 ring-foreground/5 ring-inset hover:bg-sidebar-row-selected hover:[--tile-bg:var(--sidebar-row-selected)]",
-        tile.dimmed && "opacity-35 saturate-50 hover:opacity-70",
       )}
     >
       <Tooltip>

@@ -42,8 +42,18 @@ keeps your sign-in, settings and threads.
      needs you, a blue dot when unread, a thread count on topic desks. A project's top pinned
      thread is its main thread: the tile opens it and the Pinned list leaves it out. A desk with
      no pinned thread filters the sidebar to itself and opens its latest thread; click again
-     for all projects. Hover shows + for a new thread; right-click to filter or unpin. Pin a
+     for all projects. Under Needs me or a scope, tiles outside it are hidden. Hover shows +
+     for a new thread; right-click to filter or unpin. Pin a
      project from the project menu to dock it.
+     "Arc-style Spaces sidebar" (on by default) shows one Space at a time: its own projects
+     (each project is in exactly one; new and unassigned ones land in the default Space),
+     the threads delegated from them, and a grid of threads you pinned there (right-click a
+     thread: Pin to top grid). Switch with the strip above Settings (amber dot: something
+     waits on you there; blue: unread), a two-finger sideways swipe, or Ctrl+1 to Ctrl+9.
+     Switching never changes the open chat; opening a thread from elsewhere shows its Space.
+     The ••• next to the Space's name edits its name, icon, tint and projects; + on the strip
+     adds a Space. While on, it replaces the project menu, saved views and the Bot Dock.
+     Spaces are saved on this Mac only.
    - Board: the header's View and Group menus pick what shows. Needs me counts live threads
      waiting on you plus ready bot-desk items, the same number as the sidebar's Board button and
      the bot chips; items not ready yet and later ones fold below it. Group (kept on this Mac)
@@ -92,3 +102,4 @@ reinstalls the current release.
 | Sidebar All/Needs me, Bot / Background            | none (fork-only)           | upstream separates bot threads         |
 | Scheduled jobs health on the Board (Jobs)         | none (fork-only)           | the Board patch is dropped             |
 | Bot Dock; project scope follows delegated threads | none (fork-only)           | upstream ships a pinned-project dock   |
+| Arc-style Spaces sidebar with pinned thread grids | none (fork-only)           | upstream ships sidebar spaces          |

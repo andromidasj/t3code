@@ -237,6 +237,7 @@ import { ProjectFavicon } from "./ProjectFavicon";
 import { deriveProviderEntriesByEnvironment } from "../providerInstances";
 import { useStableCallback } from "../hooks/useStableCallback";
 import {
+  completeSidebarRouteReveal,
   resolveSidebarRouteReveal,
   type SidebarRouteReveal,
   useActiveRowReveal,
@@ -275,6 +276,10 @@ import {
   withoutBotRows,
 } from "~/fork/sidebarHierarchy";
 import { useForkLineageScope, useForkSidebarHierarchy } from "~/fork/useSidebarHierarchy";
+import { SpaceFrame } from "~/fork/SpaceFrame";
+import { SpaceHeader } from "~/fork/SpaceHeader";
+import { SpaceSwitcherStrip } from "~/fork/SpaceSwitcherStrip";
+import { isSpaceGridMenuId, useSidebarSpaces } from "~/fork/useSidebarSpaces";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { TooltipProvider, TooltipScrollDismissArea } from "./ui/tooltip";
 import {
@@ -1137,10 +1142,18 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     routeDraftRedirect,
   );
   const routeThreadKey = routeThreadRef ? scopedThreadKey(routeThreadRef) : null;
+  const forkSpaces = useSidebarSpaces({
+    groups: projectGroups,
+    routeThreadRef,
+    routeDraftProject: routeDraftThread ?? null,
+    routeReveal,
+  });
 
   // A selection made under one scope can hold threads the next scope hides.
   // The viewport outlives the scope and does not anchor, so a new list starts at the top.
   const setProjectScopeKeys = (keys: readonly string[]) => {
+    // Fork: a reveal still pending from an earlier route must not widen the scope just picked.
+    completeSidebarRouteReveal(routeReveal);
     clearSelection();
     setPersistedProjectScopeKeys(keys);
     scrollSidebarToTop(sidebarContentRef.current);
@@ -1152,17 +1165,20 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const archivedProjectKeys = new Set(
     projectGroups.filter((project) => project.archived).map((project) => project.projectKey),
   );
-  const chosenProjectScopeKeys = resolveSidebarProjectScopeKeys({
-    groups: projectGroups,
-    keys: persistedProjectScopeKeys,
-    settings: projectGroupingSettings,
-    canClearMissingScope: allProjectSnapshotsReady && allProjectConfigsReady,
-  }).filter((key) => !archivedProjectKeys.has(key));
+  // Fork: with Spaces on, the shown Space's projects are the scope.
+  const chosenProjectScopeKeys =
+    forkSpaces.scopeKeys ??
+    resolveSidebarProjectScopeKeys({
+      groups: projectGroups,
+      keys: persistedProjectScopeKeys,
+      settings: projectGroupingSettings,
+      canClearMissingScope: allProjectSnapshotsReady && allProjectConfigsReady,
+    }).filter((key) => !archivedProjectKeys.has(key));
   const chosenProjectGroups = scopeGroups.filter((project) =>
     chosenProjectScopeKeys.includes(project.projectKey),
   );
   const chosenScopeProjectKeys =
-    chosenProjectGroups.length === 0
+    chosenProjectGroups.length === 0 && forkSpaces.scopeKeys === null
       ? null
       : new Set(
           chosenProjectGroups.flatMap((project) =>
@@ -1190,6 +1206,16 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   // The open draft's first send names its thread in place; a finalized draft reached by
   // navigation resolves through its redirect instead, and still reveals.
   const routeKeyInPlace = routeDraftThread?.promotedTo != null;
+  const botDock = useBotDock({
+    groups: projectGroups,
+    threads: listedThreads,
+    routeThreadKey: routeRowThreadKey,
+    projectScopeKeys: chosenProjectScopeKeys,
+  });
+  // Fork: the dock's main threads or the Space's grid, which the list leaves out.
+  const forkShownAboveThreadKeys = forkSpaces.enabled
+    ? forkSpaces.gridThreadKeys
+    : botDock.mainThreadKeys;
 
   // History, the palette and links can open a thread the scope hides or the list
   // scrolled away; a remount starts at the top, so each mount scrolls to the open
@@ -1202,20 +1228,15 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     isSearching: isSearchingThreads,
     scopedProjectKeys: chosenScopeProjectKeys,
     delegatedUnderParent,
-    // Fork: a delegated lane the scope lists through its parent needs no widening.
+    // Fork: a delegated lane the scope lists through its parent, or a thread shown above the
+    // list, needs no widening; with Spaces on, the sidebar follows the route to its Space instead.
     findThread: (key) =>
-      forkLineageScope?.has(key)
+      forkSpaces.enabled || forkLineageScope?.has(key) || forkShownAboveThreadKeys.has(key)
         ? undefined
         : threads.find((candidate) => threadShellKey(candidate) === key),
   });
   const projectScopeKeys = revealWidensScope ? [] : chosenProjectScopeKeys;
   const projectScopeKey = projectScopeKeys.length === 0 ? null : projectScopeKeys.join("\n");
-  const botDock = useBotDock({
-    groups: projectGroups,
-    threads: listedThreads,
-    routeThreadKey: routeRowThreadKey,
-    projectScopeKeys,
-  });
   const toggleProjectScopeKey = (key: string) =>
     setProjectScopeKeys(
       projectScopeKeys.includes(key)
@@ -1428,7 +1449,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     projectScopeKey,
     scopedProjectKeys,
     forkLineageScope: revealWidensScope ? null : forkLineageScope,
-    forkDockedThreadKeys: botDock.mainThreadKeys,
+    forkDockedThreadKeys: forkShownAboveThreadKeys,
     serverConfigs,
     connectedEnvironmentIds,
     optimisticDrop,
@@ -2779,7 +2800,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             ),
           ) ?? null;
         const clicked = await settlePromise(() =>
-          api.contextMenu.show(
+          forkSpaces.threadMenu(api, threadKey).show(
             buildThreadActionMenuItems({
               canOperate: readEnvironmentScope(
                 threadRef.environmentId,
@@ -2822,6 +2843,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ),
         );
         if (clicked._tag === "Failure" || clicked.value === null) return;
+        if (isSpaceGridMenuId(clicked.value)) {
+          forkSpaces.toggleGrid(threadKey);
+          return;
+        }
         if (
           threadActionRequiresOperate(clicked.value) &&
           !checkThreadOperations([thread], isThreadTriageAction(clicked.value))
@@ -3104,6 +3129,16 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     : null;
 
   const handleNewThreadClick = (event?: ReactMouseEvent) => {
+    const startedInSpace = forkSpaces.newThread({
+      event,
+      viewed: newThreadContext.activeThread ?? newThreadContext.activeDraftThread,
+      onProjectRef: (projectRef) => {
+        if (isMobile) setOpenMobile(false);
+        void handleNewThread(projectRef);
+      },
+      onGroup: startThreadInProjectFolder,
+    });
+    if (startedInSpace) return;
     const scopedProjectRef = resolveScopedNewThreadProjectRef({
       shiftKey: event?.shiftKey ?? false,
       // The folder sidebar's header button always opens the picker.
@@ -3145,7 +3180,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       : undefined);
   const newThreadInProjectShortcutLabel = shortcutLabelForCommand(keybindings, "chat.newLocal");
   return (
-    <SidebarFolderDrop>
+    <SidebarFolderDrop className={forkSpaces.enabled ? "isolate" : undefined}>
+      <SpaceFrame spaces={forkSpaces} />
       <SidebarChromeHeader isElectron={isElectron} />
       <SidebarContent
         ref={sidebarContentRef}
@@ -3153,7 +3189,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         fixedHeader={
           <SidebarGroup className="z-[1]">
             <SidebarThreadHeader
-              hasProjects={projectGroups.length > 0}
+              // Fork: Spaces replace the project menu.
+              hasProjects={projectGroups.length > 0 && !forkSpaces.enabled}
               projectScope={
                 <Combobox
                   items={projectScopeItems}
@@ -3402,6 +3439,14 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               onClearSearch={clearThreadSearch}
             />
             <SidebarPagesNav />
+            <SpaceHeader
+              spaces={forkSpaces}
+              providerEntriesByEnvironment={providerEntriesByEnvironment}
+              environmentLabelById={environmentLabelById}
+              showEnvironments={showProjectEnvironments}
+              onOpenThread={navigateToThread}
+              onNewThread={startThreadInProjectFolder}
+            />
             <BotDock
               dock={botDock}
               projectScopeKeys={projectScopeKeys}
@@ -3425,7 +3470,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           </SidebarGroup>
         }
       >
-        <SidebarGroup className="flex-1" role="presentation">
+        <SidebarGroup className="flex-1" role="presentation" data-fork-space-slide>
           {isSearchingThreads ? (
             threadSearchResults.length > 0 ? (
               <TooltipProvider
@@ -3551,6 +3596,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                   </span>
                   <button
                     type="button"
+                    // Fork: a Space has no "all projects" to show.
+                    hidden={forkSpaces.enabled}
                     onClick={() => setProjectScopeKeys([])}
                     className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-sidebar-border px-2.5 py-1 text-2xs font-medium text-sidebar-muted-foreground transition-colors hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
                   >
@@ -3932,6 +3979,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           ) : null}
         </SidebarGroup>
       </SidebarContent>
+      <SpaceSwitcherStrip spaces={forkSpaces} />
       <SidebarChromeFooter />
     </SidebarFolderDrop>
   );

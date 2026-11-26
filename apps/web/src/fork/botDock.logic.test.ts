@@ -15,7 +15,7 @@ import {
   botDockGroups,
   resolveBotDockClick,
   scopeForNewThread,
-  withoutDockedPinnedThreads,
+  withoutThreadsShownAbove,
   type BotDockGroup,
 } from "./botDock.logic";
 import { sidebarThreadKey } from "./sidebarHierarchy";
@@ -205,7 +205,7 @@ describe("bot dock tiles", () => {
     expect(tileOf(dock([group("chief")], [read, unread]), "chief").unread).toBe(true);
   });
 
-  it("is selected for its open main thread or an exclusive scope, and dims outside a filter", () => {
+  it("is selected for its open main thread or an exclusive scope, and hides outside a filter", () => {
     const main = thread("main", "penny", { pinOrder: "a" });
     const groups = [group("penny"), group("chief")];
     const open = dock(groups, [main], { routeThreadKey: sidebarThreadKey(main) });
@@ -214,18 +214,18 @@ describe("bot dock tiles", () => {
 
     const scoped = dock(groups, [main], { projectScopeKeys: [`${bots}:chief`] });
     expect(tileOf(scoped, "chief").selected).toBe(true);
-    expect(tileOf(scoped, "chief").dimmed).toBe(false);
-    expect(tileOf(scoped, "penny").dimmed).toBe(true);
+    expect(tileOf(scoped, "chief").hidden).toBe(false);
+    expect(tileOf(scoped, "penny").hidden).toBe(true);
 
     const both = dock(groups, [main], { projectScopeKeys: [`${bots}:chief`, `${bots}:penny`] });
     expect(tileOf(both, "chief").selected).toBe(false);
-    expect(tileOf(both, "penny").dimmed).toBe(false);
+    expect(tileOf(both, "penny").hidden).toBe(false);
 
     const waiting = thread("ask", "chief", { approval: true });
     const needs = dock(groups, [main, waiting], { lens: "needs-me" });
-    expect(tileOf(needs, "chief").dimmed).toBe(false);
-    expect(tileOf(needs, "penny").dimmed).toBe(true);
-    expect(tileOf(dock(groups, [main], { lens: null }), "penny").dimmed).toBe(false);
+    expect(tileOf(needs, "chief").hidden).toBe(false);
+    expect(tileOf(needs, "penny").hidden).toBe(true);
+    expect(tileOf(dock(groups, [main], { lens: null }), "penny").hidden).toBe(false);
   });
 
   it("badges the featured thread's provider, else the project's default", () => {
@@ -289,19 +289,70 @@ describe("bot dock clicks", () => {
   });
 });
 
-describe("docked main threads in the Pinned list", () => {
-  it("leaves out only the docked threads and keeps them searchable", () => {
+describe("threads shown above the list", () => {
+  it("leaves them out of every section and the drawer, and keeps them searchable", () => {
     const main = thread("main", "penny", { pinOrder: "a" });
     const second = thread("second", "penny", { pinOrder: "b" });
+    const active = thread("active", "chief");
+    const lane = thread("lane", "chief", { bot: true, run: "running" });
+    const otherBot = thread("other bot", "chief", { bot: true, run: "failed" });
+    const settled = thread("settled", "chief", { settled: true });
     const partition = {
       pinnedThreads: [main, second],
-      activeThreads: [],
-      forkHierarchy: { hiddenThreads: [] as Thread[], lens: null },
+      activeThreads: [active, lane],
+      workingThreads: [],
+      snoozedThreads: [],
+      settledThreads: [settled],
+      forkHierarchy: {
+        lens: "all" as const,
+        needsMeCount: 0,
+        drawer: {
+          threads: [lane, otherBot],
+          listed: [lane],
+          expanded: true,
+          failedCount: 1,
+          runningCount: 1,
+        },
+        botRowKeys: new Set([sidebarThreadKey(lane)]),
+        hiddenThreads: [otherBot] as Thread[],
+      },
     };
-    const result = withoutDockedPinnedThreads(partition, new Set([sidebarThreadKey(main)]));
+    const shown = new Set([main, lane, settled].map(sidebarThreadKey));
+    const result = withoutThreadsShownAbove(partition, shown);
     expect(result.pinnedThreads.map((entry) => entry.id)).toEqual(["second"]);
-    expect(result.forkHierarchy.hiddenThreads.map((entry) => entry.id)).toEqual(["main"]);
-    expect(result.forkHierarchy.lens).toBeNull();
-    expect(withoutDockedPinnedThreads(partition, new Set())).toBe(partition);
+    expect(result.activeThreads.map((entry) => entry.id)).toEqual(["active"]);
+    expect(result.settledThreads).toEqual([]);
+    expect(result.forkHierarchy.drawer?.threads.map((entry) => entry.id)).toEqual(["other bot"]);
+    expect(result.forkHierarchy.drawer?.listed).toEqual([]);
+    expect(result.forkHierarchy.drawer?.runningCount).toBe(0);
+    expect(result.forkHierarchy.drawer?.failedCount).toBe(1);
+    expect(result.forkHierarchy.botRowKeys.size).toBe(0);
+    expect(result.forkHierarchy.hiddenThreads.map((entry) => entry.id)).toEqual([
+      "other bot",
+      "main",
+      "lane",
+      "settled",
+    ]);
+    expect(withoutThreadsShownAbove(partition, new Set())).toBe(partition);
+  });
+
+  it("drops the drawer when the grid holds all its threads", () => {
+    const lane = thread("lane", "chief", { bot: true });
+    const partition = {
+      pinnedThreads: [],
+      activeThreads: [],
+      workingThreads: [],
+      snoozedThreads: [],
+      settledThreads: [],
+      forkHierarchy: {
+        lens: "all" as const,
+        needsMeCount: 0,
+        drawer: { threads: [lane], listed: [], expanded: false, failedCount: 0, runningCount: 0 },
+        botRowKeys: new Set<string>(),
+        hiddenThreads: [lane] as Thread[],
+      },
+    };
+    const result = withoutThreadsShownAbove(partition, new Set([sidebarThreadKey(lane)]));
+    expect(result.forkHierarchy.drawer).toBeNull();
   });
 });

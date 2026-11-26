@@ -328,6 +328,7 @@ describe("fork settings storage", () => {
       collapseAgentTurns: true,
       sidebarHierarchyEnabled: true,
       sidebarFilterPresets: [],
+      botDockEnabled: true,
     };
     expect(readForkSettings(storage)).toEqual(expected);
     expect(JSON.parse(storage.values.get(FORK_SETTINGS_STORAGE_KEY) ?? "null")).toEqual(expected);

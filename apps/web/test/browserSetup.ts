@@ -24,7 +24,11 @@ beforeEach(async () => {
   // Fork: upstream tests expect upstream timelines and sidebars; fork tests turn these on.
   localStorage.setItem(
     FORK_SETTINGS_STORAGE_KEY,
-    JSON.stringify({ collapseAgentTurns: false, sidebarHierarchyEnabled: false }),
+    JSON.stringify({
+      collapseAgentTurns: false,
+      sidebarHierarchyEnabled: false,
+      botDockEnabled: false,
+    }),
   );
 });
 

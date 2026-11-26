@@ -260,6 +260,7 @@ import {
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { SidebarPagesNav } from "~/fork/SidebarPagesNav";
+import { BotDock, useBotDock } from "~/fork/BotDock";
 import {
   ProjectScopeMultiSelectHint,
   SidebarBotDrawerHeader,
@@ -273,7 +274,7 @@ import {
   withBotDrawerMarker,
   withoutBotRows,
 } from "~/fork/sidebarHierarchy";
-import { useForkSidebarHierarchy } from "~/fork/useSidebarHierarchy";
+import { useForkLineageScope, useForkSidebarHierarchy } from "~/fork/useSidebarHierarchy";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { TooltipProvider, TooltipScrollDismissArea } from "./ui/tooltip";
 import {
@@ -380,6 +381,8 @@ type SidebarOptimisticDrop = {
 interface SidebarThreadPartitionInput {
   readonly threads: readonly EnvironmentThreadShell[];
   readonly scopedProjectKeys: ReadonlySet<string> | null;
+  /** Fork: the scope's threads with delegated lanes following their parent; null for upstream's. */
+  readonly forkLineageScope: ReadonlySet<string> | null;
   /** Tasks linked environments run for a listed thread; they show under it. */
   readonly delegatedUnderParent: ReadonlySet<string>;
   readonly serverConfigs: ReadonlyMap<EnvironmentId, EnvironmentServerConfig>;
@@ -447,6 +450,8 @@ function routeThreadOnly(
 function useSidebarThreads(input: {
   readonly projectScopeKey: string | null;
   readonly scopedProjectKeys: ReadonlySet<string> | null;
+  readonly forkLineageScope: ReadonlySet<string> | null;
+  readonly forkDockedThreadKeys: ReadonlySet<string>;
   readonly serverConfigs: ReadonlyMap<EnvironmentId, EnvironmentServerConfig>;
   readonly connectedEnvironmentIds: readonly EnvironmentId[];
   readonly optimisticDrop: SidebarOptimisticDrop | null;
@@ -462,6 +467,8 @@ function useSidebarThreads(input: {
   const {
     projectScopeKey,
     scopedProjectKeys,
+    forkLineageScope,
+    forkDockedThreadKeys,
     serverConfigs,
     connectedEnvironmentIds,
     optimisticDrop,
@@ -514,6 +521,7 @@ function useSidebarThreads(input: {
   const upstreamPartition = partitionSidebarThreads({
     threads,
     scopedProjectKeys,
+    forkLineageScope,
     delegatedUnderParent,
     serverConfigs,
     connectedEnvironmentIds,
@@ -522,7 +530,11 @@ function useSidebarThreads(input: {
     sortActiveBySend: folderGroups !== null,
     clockKey: `${nowMinute}:${snoozeWakeClock}:${inboxReturnsVersion}`,
   });
-  const partition = useForkSidebarHierarchy(upstreamPartition, routeRowThreadKey);
+  const partition = useForkSidebarHierarchy(
+    upstreamPartition,
+    routeRowThreadKey,
+    forkDockedThreadKeys,
+  );
 
   const { pinnedThreads, activeThreads, workingThreads, snoozedThreads, settledThreads } =
     partition;
@@ -670,7 +682,13 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
     sortActiveBySend,
   } = input;
   const preciseNow = new Date().toISOString();
-  const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys, delegatedUnderParent);
+  const { forkLineageScope } = input;
+  const visible =
+    forkLineageScope === null
+      ? filterSidebarV2VisibleThreads(threads, scopedProjectKeys, delegatedUnderParent)
+      : filterSidebarV2VisibleThreads(threads, null, delegatedUnderParent).filter((thread) =>
+          forkLineageScope.has(threadShellKey(thread)),
+        );
   const inboxObservation = inboxReturns.observe(workingShelfEnabled ? threads : null);
   const pinned: EnvironmentThreadShell[] = [];
   const active: EnvironmentThreadShell[] = [];
@@ -1168,6 +1186,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       ? null
       : scopedThreadKey(resolveListedAncestorThreadRef(routeThreadRef, threads));
   const isSearchingThreads = threadSearchQuery.trim().length > 0;
+  const forkLineageScope = useForkLineageScope(threads, chosenScopeProjectKeys);
   // The open draft's first send names its thread in place; a finalized draft reached by
   // navigation resolves through its redirect instead, and still reveals.
   const routeKeyInPlace = routeDraftThread?.promotedTo != null;
@@ -1183,10 +1202,20 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     isSearching: isSearchingThreads,
     scopedProjectKeys: chosenScopeProjectKeys,
     delegatedUnderParent,
-    findThread: (key) => threads.find((candidate) => threadShellKey(candidate) === key),
+    // Fork: a delegated lane the scope lists through its parent needs no widening.
+    findThread: (key) =>
+      forkLineageScope?.has(key)
+        ? undefined
+        : threads.find((candidate) => threadShellKey(candidate) === key),
   });
   const projectScopeKeys = revealWidensScope ? [] : chosenProjectScopeKeys;
   const projectScopeKey = projectScopeKeys.length === 0 ? null : projectScopeKeys.join("\n");
+  const botDock = useBotDock({
+    groups: projectGroups,
+    threads: listedThreads,
+    routeThreadKey: routeRowThreadKey,
+    projectScopeKeys,
+  });
   const toggleProjectScopeKey = (key: string) =>
     setProjectScopeKeys(
       projectScopeKeys.includes(key)
@@ -1398,6 +1427,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   } = useSidebarThreads({
     projectScopeKey,
     scopedProjectKeys,
+    forkLineageScope: revealWidensScope ? null : forkLineageScope,
+    forkDockedThreadKeys: botDock.mainThreadKeys,
     serverConfigs,
     connectedEnvironmentIds,
     optimisticDrop,
@@ -3371,6 +3402,20 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               onClearSearch={clearThreadSearch}
             />
             <SidebarPagesNav />
+            <BotDock
+              dock={botDock}
+              projectScopeKeys={projectScopeKeys}
+              routeThreadKey={routeRowThreadKey}
+              providerEntriesByEnvironment={providerEntriesByEnvironment}
+              environmentLabelById={environmentLabelById}
+              showEnvironments={showProjectEnvironments}
+              canUnpin={canPinProject}
+              onProjectScopeChange={setProjectScopeKeys}
+              onOpenThread={navigateToThread}
+              onNewThread={startThreadInProjectFolder}
+              onOpenProjectSettings={openProjectSettings}
+              onUnpin={toggleProjectGroupPin}
+            />
             <SidebarFilterBar
               needsMeCount={forkHierarchy.needsMeCount}
               hidden={isSearchingThreads}

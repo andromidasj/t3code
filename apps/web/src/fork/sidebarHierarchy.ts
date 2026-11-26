@@ -7,15 +7,19 @@ import type { SidebarFilterPreset } from "./forkSettings";
 
 /**
  * The sidebar's quick filter. `all` lists the user's threads and folds threads bots started on
- * their own into a Bot / Background drawer; `mine` leaves that drawer out; `needs-me` lists only
- * threads waiting on the user.
+ * their own into a Bot / Background drawer; `needs-me` lists only threads waiting on the user.
  */
-export type SidebarFilterLens = "all" | "mine" | "needs-me";
+export type SidebarFilterLens = "all" | "needs-me";
 
-export const SIDEBAR_FILTER_LENSES: ReadonlyArray<SidebarFilterLens> = ["all", "mine", "needs-me"];
+export const SIDEBAR_FILTER_LENSES: ReadonlyArray<SidebarFilterLens> = ["all", "needs-me"];
 
 export function isSidebarFilterLens(value: unknown): value is SidebarFilterLens {
   return SIDEBAR_FILTER_LENSES.includes(value as SidebarFilterLens);
+}
+
+/** A stored lens; `mine`, dropped since, and anything unknown read as All. */
+export function parseSidebarFilterLens(value: unknown): SidebarFilterLens {
+  return isSidebarFilterLens(value) ? value : "all";
 }
 
 export type SidebarHierarchyThread = Pick<
@@ -75,7 +79,8 @@ const RUNNING_RUN_STATUSES: ReadonlySet<string> = new Set([
   "waiting",
 ]);
 
-function isThreadRunning(thread: SidebarHierarchyThread): boolean {
+/** A run is underway: queued, starting, running or waiting on another thread. */
+export function isThreadRunning(thread: SidebarHierarchyThread): boolean {
   const run = thread.latestRun;
   return run != null && RUNNING_RUN_STATUSES.has(run.status) && run.turnEnded !== true;
 }
@@ -178,7 +183,7 @@ export function applySidebarHierarchy<
     ...partition.workingThreads.filter((thread) => !isHumanThread(thread)),
     ...partition.activeThreads.filter((thread) => !isHumanThread(thread)),
   ];
-  const showDrawer = lens === "all" && bots.length > 0;
+  const showDrawer = bots.length > 0;
   const listedBots = keep(bots, () => showDrawer && options.botExpanded);
   return {
     ...partition,

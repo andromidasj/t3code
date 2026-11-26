@@ -25,7 +25,7 @@ import { useSidebarLens } from "./useSidebarHierarchy";
 const newPresetId = () => `view-${Date.now().toString(36)}`;
 
 /**
- * All | Mine | Needs me under the sidebar's pages, and this Mac's saved project views. Hidden
+ * All | Needs me under the sidebar's pages, and this Mac's saved project views. Hidden
  * while searching and when the hierarchy is off.
  */
 export function SidebarFilterBar(props: {
@@ -56,9 +56,6 @@ export function SidebarFilterBar(props: {
         >
           <Toggle value="all" className={LENS_CLASS}>
             <T context="sidebar thread filter">All</T>
-          </Toggle>
-          <Toggle value="mine" className={LENS_CLASS}>
-            <T context="sidebar thread filter, the user's own threads">Mine</T>
           </Toggle>
           <Toggle
             value="needs-me"
@@ -95,8 +92,8 @@ export function SidebarFilterBar(props: {
   );
 }
 
-// Each option takes the room its label needs, so "Needs me 12" fits a narrow sidebar.
-const LENS_CLASS = "flex-auto shrink whitespace-nowrap";
+// The two options split the bar evenly; "Needs me 12" still fits a narrow sidebar.
+const LENS_CLASS = "flex-1 shrink whitespace-nowrap";
 
 const CHIP_CLASS =
   "inline-flex h-6 max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-full border px-2.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";

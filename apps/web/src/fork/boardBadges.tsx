@@ -47,13 +47,13 @@ export function WhenBadge({ when }: { when: BoardItem["when"] }) {
     case "now":
       return (
         <Badge size="sm" variant="info" className="shrink-0">
-          <T context="board item timing">Now</T>
+          <T context="board item priority">Do now</T>
         </Badge>
       );
     case "anytime":
       return (
         <Badge size="sm" variant="secondary" className="shrink-0">
-          <T context="board item timing">Anytime</T>
+          <T context="board item priority">Anytime</T>
         </Badge>
       );
     case "later":

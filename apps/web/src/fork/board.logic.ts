@@ -181,8 +181,10 @@ export interface BoardItemRow {
 }
 
 export interface BoardItemLists {
-  /** Items with a `when` other than "later", best next step first. */
-  readonly ranked: ReadonlyArray<BoardItemRow>;
+  /** What Josh can act on now (not later, no banner), best next step first. */
+  readonly ready: ReadonlyArray<BoardItemRow>;
+  /** Items with a banner: open, but nothing for Josh to do yet. */
+  readonly notReady: ReadonlyArray<BoardItemRow>;
   /** `when: later` items, folded away below the rest. */
   readonly later: ReadonlyArray<BoardItemRow>;
 }
@@ -199,31 +201,88 @@ const deskVisible = (desk: BoardDesk, deskFilter: string | null | undefined) =>
   deskFilter === null || deskFilter === undefined || desk.slug === deskFilter;
 
 /**
- * board.py's order across desks: ready items before not-ready ones (a banner), `now` before
- * `anytime`, then the items that unblock the most, then each desk's own rank.
+ * board.py's order across desks: `now` before `anytime`, then the items that unblock the most,
+ * then each desk's own rank. Ready, not-ready and later items are listed apart, so a count of
+ * ready items always matches the rows under it.
  */
 export function rankBoardItems(data: BoardData | null, deskFilter?: string | null): BoardItemLists {
-  if (data === null) return { ranked: [], later: [] };
+  if (data === null) return { ready: [], notReady: [], later: [] };
   const deskOrder = new Map(data.desks.map((desk, index) => [desk.slug, index]));
-  const ranked: BoardItemRow[] = [];
+  const ready: BoardItemRow[] = [];
+  const notReady: BoardItemRow[] = [];
   const later: BoardItemRow[] = [];
   for (const desk of data.desks) {
     if (!deskVisible(desk, deskFilter)) continue;
     for (const item of desk.items) {
       const row = { key: boardItemKey(desk.slug, item.id), desk, item };
-      (isBoardItemLater(item) ? later : ranked).push(row);
+      (isBoardItemLater(item) ? later : item.banner !== null ? notReady : ready).push(row);
     }
   }
   const compare = (a: BoardItemRow, b: BoardItemRow) =>
-    Number(a.item.banner !== null) - Number(b.item.banner !== null) ||
     (WHEN_RANK[a.item.when] ?? 0) - (WHEN_RANK[b.item.when] ?? 0) ||
     b.item.reach - a.item.reach ||
     (a.item.rank ?? 999) - (b.item.rank ?? 999) ||
     (deskOrder.get(a.desk.slug) ?? 0) - (deskOrder.get(b.desk.slug) ?? 0) ||
     a.item.id.localeCompare(b.item.id);
-  ranked.sort(compare);
-  later.sort(compare);
-  return { ranked, later };
+  return {
+    ready: ready.sort(compare),
+    notReady: notReady.sort(compare),
+    later: later.sort(compare),
+  };
+}
+
+/** How the Board groups its ready items under Needs me. */
+export type BoardGrouping = "priority" | "type" | "bot" | "flat";
+
+export const BOARD_GROUPINGS: ReadonlyArray<BoardGrouping> = ["priority", "type", "bot", "flat"];
+
+export interface BoardItemGroup {
+  /** `now`/`anytime`, `send`/`decide`/`do`, or a desk slug; null for one unheaded list. */
+  readonly id: string | null;
+  readonly desk: BoardDesk | null;
+  readonly rows: ReadonlyArray<BoardItemRow>;
+}
+
+const TYPE_ORDER: Readonly<Record<string, number>> = { send: 0, decide: 1, do: 2 };
+
+/**
+ * Ready items split into the grouping's sub-lists, each keeping the board's order. A grouping
+ * that leaves one group, or none, is one unheaded list.
+ */
+export function groupBoardItems(
+  rows: ReadonlyArray<BoardItemRow>,
+  grouping: BoardGrouping,
+  data: BoardData | null,
+): ReadonlyArray<BoardItemGroup> {
+  if (rows.length === 0) return [];
+  const flat: ReadonlyArray<BoardItemGroup> = [{ id: null, desk: null, rows }];
+  if (grouping === "flat") return flat;
+  const idOf = (row: BoardItemRow) =>
+    grouping === "priority" ? row.item.when : grouping === "type" ? row.item.type : row.desk.slug;
+  const groups = new Map<string, BoardItemRow[]>();
+  for (const row of rows) {
+    const id = idOf(row);
+    const group = groups.get(id);
+    if (group) group.push(row);
+    else groups.set(id, [row]);
+  }
+  if (groups.size === 1) return flat;
+  const deskOrder = new Map((data?.desks ?? []).map((desk, index) => [desk.slug, index]));
+  const rankOf = (id: string, first: BoardItemRow) =>
+    grouping === "priority"
+      ? (WHEN_RANK[id] ?? 2)
+      : grouping === "type"
+        ? (TYPE_ORDER[id] ?? 3)
+        : (deskOrder.get(first.desk.slug) ?? 0);
+  return [...groups.entries()]
+    .map(([id, members]) => ({
+      id,
+      desk: grouping === "bot" ? members[0]!.desk : null,
+      rows: members,
+      rank: rankOf(id, members[0]!),
+    }))
+    .sort((a, b) => a.rank - b.rank || a.id.localeCompare(b.id))
+    .map(({ id, desk, rows: members }) => ({ id, desk, rows: members }));
 }
 
 /** Ready items for the sidebar's count. */
@@ -287,16 +346,16 @@ export function collectBoardToday(
 
 export interface BoardDeskCount {
   readonly desk: BoardDesk;
-  /** Open items, `later` ones included, as board.py counts what waits on Josh. */
+  /** Ready items, the count Needs me and the sidebar's Board button add up. */
   readonly count: number;
 }
 
-/** Desks with open items, in the board's order. */
+/** Desks with open items, in the board's order; a desk with only later or not-ready ones counts 0. */
 export function boardDeskCounts(data: BoardData | null): ReadonlyArray<BoardDeskCount> {
   if (data === null) return [];
   return data.desks
-    .map((desk) => ({ desk, count: desk.items.length }))
-    .filter((entry) => entry.count > 0);
+    .filter((desk) => desk.items.length > 0)
+    .map((desk) => ({ desk, count: desk.items.filter(isBoardItemReady).length }));
 }
 
 export type BoardProjectInput = Pick<

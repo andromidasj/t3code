@@ -179,13 +179,13 @@ export function createSidebarSortingStrategy(input: {
     const bot = splitBotDrawerRows(items, groups.active);
     if (bot !== null) groups.active = bot.human;
     section("active");
-    if (bot !== null) {
-      marker("bot-header");
-      projected.push(...bot.bot);
-    }
     if (items.some((item) => item.kind === "marker" && item.marker === "working-header")) {
       marker("working-header");
       projected.push(...groups.working);
+    }
+    if (bot !== null) {
+      marker("bot-header");
+      projected.push(...bot.bot);
     }
     if (
       groups.snoozed.length > 0 ||

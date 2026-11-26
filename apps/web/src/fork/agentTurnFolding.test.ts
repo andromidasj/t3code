@@ -269,6 +269,54 @@ describe("foldAgentTurns", () => {
       expect(fold([automation("j1"), reply("a1", "Summary.\n\n👉 Needs you: sign")])).toEqual([]);
     });
 
+    it("a 👉 or ⚠️ sits anywhere in the reply", () => {
+      expect(fold([agent("g1"), reply("a1", "Done.\n👉 see the invoice")])).toEqual([]);
+      expect(fold([agent("g1"), reply("a1", "Mostly fine, 👉 one thing")])).toEqual([]);
+      expect(fold([agent("g1"), reply("a1", "Backup ran.\n⚠️ disk is 91% full")])).toEqual([]);
+      expect(fold([agent("g1"), reply("a1", "FYI: all quiet")])).toHaveLength(1);
+    });
+
+    it("the turn carries a visual, a sent message, or an attachment", () => {
+      const htmlRender = { kind: "html-render", id: "h1", createdAt: AT } as unknown as Row;
+      const sent = { kind: "sent-message", id: "s1", createdAt: AT, text: "hi" } as unknown as Row;
+      const viewed = {
+        kind: "viewed-images",
+        id: "v1",
+        createdAt: AT,
+        paths: [],
+      } as unknown as Row;
+      expect(fold([agent("g1"), reply("a1", "chart"), htmlRender])).toEqual([]);
+      expect(fold([agent("g1"), sent])).toEqual([]);
+      expect(fold([agent("g1"), viewed])).toEqual([]);
+      expect(
+        fold([
+          agent("g1"),
+          reply("a1", "see file", { attachments: [{ type: "image", id: "i1", name: "a.png" }] }),
+        ]),
+      ).toEqual([]);
+    });
+
+    it("a scheduled job is set to always deliver", () => {
+      const job = (id: string, mode: string) =>
+        userRow(id, `Run the backup.\n\n[t3-delivery: ${mode}]`, {
+          createdBy: "user",
+          scheduledTaskId: ScheduledTaskId.make("task-1"),
+        });
+      expect(fold([job("j1", "always"), reply("a1", "done")])).toEqual([]);
+      expect(fold([job("j1", "silent"), reply("a1", "done")])).toHaveLength(1);
+      expect(fold([job("j1", "updates-only"), reply("a1", "done")])).toHaveLength(1);
+      expect(fold([automation("j1"), reply("a1", "🤖 FYI: routine")])).toHaveLength(1);
+      // The task's own prompt decides when the message text lacks the marker.
+      const context = { ...NONE, alwaysTaskIds: new Set(["task-1"]) };
+      expect(fold([automation("j1"), reply("a1", "done")], context)).toEqual([]);
+      expect(
+        fold([automation("j1"), reply("a1", "done")], {
+          ...NONE,
+          alwaysTaskIds: new Set(["task-2"]),
+        }),
+      ).toHaveLength(1);
+    });
+
     it("it holds the cited message", () => {
       expect(
         fold([agent("g1"), reply("a1", "x")], { ...NONE, pinnedIds: new Set(["a1"]) }),
@@ -295,11 +343,12 @@ describe("foldAgentTurns", () => {
 });
 
 describe("flagsUser", () => {
-  it("matches a leading 👉 or a 👉 Needs you anywhere", () => {
+  it("matches a 👉 or ⚠️ anywhere", () => {
     expect(flagsUser("👉 look")).toBe(true);
     expect(flagsUser("\n 👉look")).toBe(true);
     expect(flagsUser("done. 👉 Needs you to sign")).toBe(true);
-    expect(flagsUser("done. 👉 see above")).toBe(false);
+    expect(flagsUser("done. 👉 see above")).toBe(true);
+    expect(flagsUser("careful ⚠️ low disk")).toBe(true);
     expect(flagsUser("all quiet")).toBe(false);
   });
 });

@@ -788,6 +788,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
   });
   const rows = useAgentTurnFolding(useStableRows(rawRows, listIdentityKey), {
     threadKey: listIdentityKey,
+    environmentId: activeThreadEnvironmentId,
     disabled: findActive,
     pendingApprovalRequestIds,
     latestRun,

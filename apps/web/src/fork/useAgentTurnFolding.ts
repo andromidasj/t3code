@@ -1,7 +1,10 @@
+import type { EnvironmentId } from "@t3tools/contracts";
 import { useState } from "react";
 
 import type { MessagesTimelineRow } from "~/components/chat/MessagesTimeline.logic";
 import { useStableCallback } from "~/hooks/useStableCallback";
+import { useEnvironmentQuery } from "~/state/query";
+import { serverEnvironment } from "~/state/server";
 
 import {
   foldAgentTurns,
@@ -10,10 +13,13 @@ import {
   type AgentTurnFoldingContext,
 } from "./agentTurnFolding";
 import { useForkSettings } from "./forkSettings";
+import { parseScheduledDeliveryMode } from "./scheduledDelivery";
 
 const NO_IDS: ReadonlySet<string> = new Set();
 
-interface FoldingInput extends Omit<AgentTurnFoldingContext, "expandedGroupIds"> {
+interface FoldingInput extends Omit<AgentTurnFoldingContext, "expandedGroupIds" | "alwaysTaskIds"> {
+  /** Reads the thread's scheduled tasks, so `always` jobs stay visible. */
+  readonly environmentId?: EnvironmentId | undefined;
   /** Folds reset when the timeline shows another thread. */
   readonly threadKey: string;
   /** Thread find reads every row, so folding steps aside while it is open. */
@@ -27,13 +33,18 @@ function idsKey(ids: ReadonlySet<string> | undefined): string {
 }
 
 /** Everything that changes the folded rows besides the rows themselves, as one string. */
-function inputKey(input: FoldingInput, expanded: ReadonlySet<string>): string {
+function inputKey(
+  input: FoldingInput,
+  expanded: ReadonlySet<string>,
+  alwaysTaskIds: ReadonlySet<string>,
+): string {
   const latest = input.latestRun;
   return [
     input.threadKey,
     idsKey(expanded),
     idsKey(input.pendingApprovalRequestIds),
     idsKey(input.pinnedIds),
+    idsKey(alwaysTaskIds),
     latest ? `${latest.runId}:${latest.status}` : "",
     input.runningRunId ?? "",
     input.usageLimitRunId ?? "",
@@ -47,6 +58,17 @@ export function useAgentTurnFolding(
   input: FoldingInput,
 ): MessagesTimelineRow[] {
   const { collapseAgentTurns } = useForkSettings();
+  const tasksQuery = useEnvironmentQuery(
+    input.environmentId
+      ? serverEnvironment.scheduledTasksLive({ environmentId: input.environmentId, input: {} })
+      : null,
+  );
+  const tasks = tasksQuery.data?.tasks;
+  const alwaysTaskIds = new Set<string>(
+    (tasks ?? [])
+      .filter((task) => parseScheduledDeliveryMode(task.prompt) === "always")
+      .map((task) => task.id),
+  );
   const enabled = collapseAgentTurns && !input.disabled;
   const [expandedState, setExpandedState] = useState<{
     readonly threadKey: string;
@@ -71,9 +93,14 @@ export function useAgentTurnFolding(
   });
 
   if (!enabled) return rows;
-  const key = inputKey(input, expanded);
+  const key = inputKey(input, expanded, alwaysTaskIds);
   if (derived.source === rows && derived.key === key) return derived.rows;
-  const folded = foldAgentTurns(rows, { ...input, expandedGroupIds: expanded, onToggle: toggle });
+  const folded = foldAgentTurns(rows, {
+    ...input,
+    alwaysTaskIds,
+    expandedGroupIds: expanded,
+    onToggle: toggle,
+  });
   const reused =
     folded === rows
       ? { rows, byId: new Map<string, AgentTurnFoldRow>() }

@@ -260,13 +260,18 @@ import {
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { SidebarPagesNav } from "~/fork/SidebarPagesNav";
-import { SidebarBotDrawerHeader, SidebarFilterBar } from "~/fork/SidebarFilterBar";
 import {
+  ProjectScopeMultiSelectHint,
+  SidebarBotDrawerHeader,
+  SidebarFilterBar,
+} from "~/fork/SidebarFilterBar";
+import {
+  isProjectScopeMultiSelectClick,
   sidebarBotRows,
   sidebarDrawerCount,
-  sidebarFolderThreads,
   sidebarSettledCount,
   withBotDrawerMarker,
+  withoutBotRows,
 } from "~/fork/sidebarHierarchy";
 import { useForkSidebarHierarchy } from "~/fork/useSidebarHierarchy";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
@@ -561,7 +566,7 @@ function useSidebarThreads(input: {
       ? null
       : groupSidebarThreadsByProject(
           folderGroups,
-          sidebarFolderThreads(activeThreads, partition.forkHierarchy),
+          withoutBotRows(activeThreads, partition.forkHierarchy),
           keepEmpty,
         ).map((folder) => {
           const collapsed = !resolveProjectExpanded(
@@ -583,10 +588,10 @@ function useSidebarThreads(input: {
   const orderedThreads = [
     ...pinnedThreads,
     ...(projectFolders === null
-      ? activeThreads
+      ? withoutBotRows(activeThreads, partition.forkHierarchy)
       : projectFolders.flatMap((folder) => folder.threads)),
-    ...(projectFolders === null ? [] : sidebarBotRows(activeThreads, partition.forkHierarchy)),
     ...visibleWorkingThreads,
+    ...sidebarBotRows(activeThreads, partition.forkHierarchy),
     ...visibleSnoozedThreads,
     ...renderedSettledThreads,
   ];
@@ -2089,9 +2094,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     dragState === null && sidebarListItems.length + visibleDraftSessionCount > 0;
   // Cache on both fields so layout-key changes trigger the effect even when animate is unchanged.
   const listMotionPass = { layoutKey: listMotionLayoutKey, animate: listMotionAnimate };
-  const shelfExpansionKey = [workingShelfExpanded, snoozedShelfExpanded, settledShelfExpanded].join(
-    ":",
-  );
+  const shelfExpansionKey = [
+    workingShelfExpanded,
+    snoozedShelfExpanded,
+    settledShelfExpanded,
+    // Fork: the Bot / Background drawer is a bottom shelf too, so its toggle skips list motion.
+    forkHierarchy.drawer?.expanded,
+  ].join(":");
   const previousShelfExpansionKeyRef = useRef(shelfExpansionKey);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- records moved rows and updates list motion after each layout-affecting commit
   useLayoutEffect(() => {
@@ -3144,7 +3153,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                       setProjectScopeKeys([]);
                     } else if (
                       eventDetails.event instanceof MouseEvent &&
-                      eventDetails.event.shiftKey
+                      isProjectScopeMultiSelectClick(eventDetails.event)
                     ) {
                       // Canceling skips Base UI's commit, which would freeze the search query, and its close.
                       eventDetails.cancel();
@@ -3334,6 +3343,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                         );
                       }}
                     </ComboboxList>
+                    <ProjectScopeMultiSelectHint />
                   </ComboboxPopup>
                 </Combobox>
               }
@@ -3718,6 +3728,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                 <SidebarBotDrawerHeader
                                   key="bot-header"
                                   drawer={forkHierarchy.drawer}
+                                  anchored={workingThreads.length === 0}
                                   onToggle={forkHierarchy.toggleBotDrawer}
                                 />,
                               );
@@ -3783,7 +3794,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                               <SidebarSectionHeader
                                 key="snoozed-shelf-header"
                                 marker="snoozed-header"
-                                className={cn(workingThreads.length === 0 && "mt-auto")}
+                                className={cn(
+                                  workingThreads.length + sidebarDrawerCount(forkHierarchy) === 0 &&
+                                    "mt-auto",
+                                )}
                                 label={gt("Snoozed", { $context: "sidebar section" })}
                                 count={snoozedThreads.length}
                                 toggle={{
@@ -3799,7 +3813,10 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                                 key="settled-shelf-header"
                                 marker="settled-header"
                                 className={cn(
-                                  workingThreads.length + snoozedThreads.length === 0 && "mt-auto",
+                                  workingThreads.length +
+                                    snoozedThreads.length +
+                                    sidebarDrawerCount(forkHierarchy) ===
+                                    0 && "mt-auto",
                                 )}
                                 label={gt("Settled", { $context: "sidebar section" })}
                                 count={settledCount}

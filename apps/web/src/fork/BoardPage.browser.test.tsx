@@ -205,3 +205,105 @@ it("opens a Board item's details beside the board and its desk's thread in one c
     ),
   );
 });
+
+it("groups ready items under Needs me and keeps every count in step", async () => {
+  const environmentFetch = globalThis.fetch;
+  const item = (id: string, type: string, when: string, banner?: string) => ({
+    id,
+    type,
+    ask: `Ask about ${id}`,
+    when,
+    body: "",
+    ...(banner === undefined ? {} : { banner }),
+  });
+  const desk = (name: string, slug: string, items: ReadonlyArray<object>) => ({
+    name,
+    slug,
+    items,
+    rows: [],
+    today: [],
+    errors: [],
+  });
+  const board = {
+    built: "2026-11-25T10:00:00-06:00",
+    desks: [
+      desk("Chief", "chief", [
+        item("renewDomain", "do", "now"),
+        item("pickFlight", "decide", "anytime"),
+      ]),
+      desk("Eagle Eye", "eagle", [
+        item("sendInvoice", "send", "now"),
+        item("reviewPr", "decide", "now"),
+        item("waitZach", "do", "now", "waiting on Zach"),
+        item("someday", "do", "later"),
+      ]),
+      desk("Mortie", "mortie", [item("inspect", "do", "now", "after closing")]),
+    ],
+  };
+  globalThis.fetch = async (input, init) =>
+    String(input instanceof Request ? input.url : input) === "https://board.test/data.json"
+      ? new Response(JSON.stringify(board), { headers: { "content-type": "application/json" } })
+      : environmentFetch(input, init);
+  using _fetch = { [Symbol.dispose]: () => void (globalThis.fetch = environmentFetch) };
+  updateForkSettings({ boardUrl: "https://board.test/data.json" });
+  using _board = { [Symbol.dispose]: () => void updateForkSettings({ boardUrl: "" }) };
+  using _grouping = {
+    [Symbol.dispose]: () => localStorage.removeItem("t3code:fork:board-grouping"),
+  };
+  useBoardPanelStore.setState({ open: false, selection: null, choices: {} });
+  const { app } = await mountBoard();
+  await using _app = app;
+
+  await expect.element(page.getByText("Ask about renewDomain")).toBeVisible();
+  const itemRows = () =>
+    [...document.querySelectorAll("button")].filter((button) =>
+      button.textContent?.startsWith("Ask about"),
+    );
+  // Labels and counts sit in separate elements with no text between them.
+  const text = (element: Element | null | undefined) => element?.textContent?.replace(/\s+/g, "");
+  // Needs me lists exactly its count; Not ready and Later stay folded below it.
+  await vi.waitFor(() => expect(itemRows()).toHaveLength(4));
+  const heading = [...document.querySelectorAll("h2")].find((h2) =>
+    h2.textContent?.startsWith("Needs me"),
+  );
+  expect(text(heading)).toBe("Needsme4");
+  await expect.element(page.getByRole("button", { name: "Board, 4 need you" })).toBeVisible();
+  const chips = page.getByRole("group", { name: "Filter by bot" });
+  expect(
+    [...chips.element().querySelectorAll('[data-slot="toggle"]')]
+      .slice(1)
+      .map((chip) => text(chip)),
+  ).toEqual(["Chief2", "EagleEye2", "Mortie0"]);
+  const notReady = page.getByRole("button", { name: /^Not ready/ });
+  await expect.element(notReady).toHaveAttribute("aria-expanded", "false");
+  await expect.element(page.getByRole("button", { name: /^Later/ })).toBeVisible();
+
+  // Priority by default: Do now, then Anytime, with the priority beside the item's type.
+  const groups = () =>
+    [...document.querySelectorAll('[role="group"] > h3')].map((header) => text(header));
+  await vi.waitFor(() => expect(groups()).toEqual(["Donow3", "Anytime1"]));
+  const renew = itemRows().find((row) => row.textContent?.includes("renewDomain"))!;
+  expect(text(renew)).toBe("AskaboutrenewDomainChiefDoDonowrenewDomain");
+
+  const pickGrouping = async (name: string) => {
+    await page.getByRole("button", { name: /^Group:/ }).click();
+    await page.getByRole("menuitemradio", { name }).click();
+  };
+  await pickGrouping("Type");
+  await vi.waitFor(() => expect(groups()).toEqual(["Send1", "Decide2", "Do1"]));
+  await pickGrouping("Bot");
+  await vi.waitFor(() => expect(groups()).toEqual(["Chief2", "EagleEye2"]));
+  expect(localStorage.getItem("t3code:fork:board-grouping")).toBe('"bot"');
+  await pickGrouping("Flat");
+  await vi.waitFor(() => expect(groups()).toEqual([]));
+  expect(itemRows()).toHaveLength(4);
+
+  await notReady.click();
+  await vi.waitFor(() => expect(itemRows()).toHaveLength(6));
+
+  await page.getByRole("button", { name: /^View:/ }).click();
+  const needsMe = page.getByRole("menuitemradio", { name: /^Needs me/ });
+  await vi.waitFor(() => expect(text(needsMe.element())).toBe("Needsme4"));
+  await needsMe.click();
+  await expect.element(page.getByRole("button", { name: /^View:\s*Needs me/ })).toBeVisible();
+});

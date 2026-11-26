@@ -65,16 +65,6 @@ export function useBoardScheduledJobs(
 }
 
 /** The Jobs filter's count: red with the failed jobs while any fail. */
-export function BoardJobsCountBadge(props: { readonly rows: ReadonlyArray<BoardJobRow> }) {
-  const failed = countFailedBoardJobs(props.rows);
-  if (failed === 0 && props.rows.length === 0) return null;
-  return (
-    <Badge size="sm" variant={failed > 0 ? "error" : "secondary"}>
-      {failed > 0 ? failed : props.rows.length}
-    </Badge>
-  );
-}
-
 /**
  * The Board's scheduled jobs: a strip at the bottom of All (open on its own while a job is
  * failing) or the whole Jobs view.

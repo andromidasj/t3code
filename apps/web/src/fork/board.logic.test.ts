@@ -18,7 +18,9 @@ import {
   parseBoardItemKey,
   parseBoardThreadHref,
   plainBoardText,
+  groupBoardItems,
   rankBoardItems,
+  type BoardGrouping,
   rewriteBoardThreadLinks,
   type BoardProjectInput,
   type BoardThreadInput,
@@ -556,12 +558,13 @@ describe("board page fallback", () => {
 });
 
 describe("rankBoardItems", () => {
-  it("orders ready before not ready, now before anytime, then reach and rank, and folds later", () => {
+  it("splits ready, not ready and later, ordering now before anytime, then reach and rank", () => {
     const data = board(
       desk("chief", [
         item("anytime-wide", { when: "anytime", reach: 3 }),
         item("now-rank1", { rank: 1 }),
         item("not-ready", { banner: "waiting on Zach" }),
+        item("not-ready-later", { banner: "parked", when: "later" }),
         item("later", { when: "later" }),
       ]),
       desk("house", [
@@ -571,29 +574,87 @@ describe("rankBoardItems", () => {
       ]),
     );
     const lists = rankBoardItems(data);
-    expect(lists.ranked.map((row) => row.item.id)).toEqual([
+    expect(lists.ready.map((row) => row.item.id)).toEqual([
       "now-reach2",
       "now-rank0",
       "now-rank1",
       "anytime-wide",
       "anytime",
-      "not-ready",
     ]);
-    expect(lists.later.map((row) => row.key)).toEqual(["chief/later"]);
-    expect(countReadyBoardItems(data)).toBe(5);
-    expect(rankBoardItems(data, "house").ranked.map((row) => row.item.id)).toEqual([
+    expect(lists.notReady.map((row) => row.key)).toEqual(["chief/not-ready"]);
+    expect(lists.later.map((row) => row.key)).toEqual(["chief/later", "chief/not-ready-later"]);
+    // The sidebar's count is the rows listed as ready.
+    expect(countReadyBoardItems(data)).toBe(lists.ready.length);
+    expect(rankBoardItems(data, "house").ready.map((row) => row.item.id)).toEqual([
       "now-reach2",
       "now-rank0",
       "anytime",
     ]);
-    expect(rankBoardItems(null)).toEqual({ ranked: [], later: [] });
+    expect(rankBoardItems(null)).toEqual({ ready: [], notReady: [], later: [] });
   });
 
-  it("counts open items per desk, leaving out desks with none", () => {
-    const data = board(desk("chief", [item("a"), item("b", { when: "later" })]), desk("house", []));
-    expect(boardDeskCounts(data).map((entry) => [entry.desk.slug, entry.count])).toEqual([
-      ["chief", 2],
+  it("counts ready items per desk so the chips add up to Needs me, keeping desks with none ready", () => {
+    const data = board(
+      desk("chief", [item("a"), item("b", { when: "later" })]),
+      desk("eagle", [item("c"), item("d"), item("e", { banner: "blocked" })]),
+      desk("mortie", [item("f", { banner: "blocked" })]),
+      desk("house", []),
+    );
+    const counts = boardDeskCounts(data).map((entry) => [entry.desk.slug, entry.count]);
+    expect(counts).toEqual([
+      ["chief", 1],
+      ["eagle", 2],
+      ["mortie", 0],
     ]);
+    const sum = boardDeskCounts(data).reduce((total, entry) => total + entry.count, 0);
+    expect(sum).toBe(countReadyBoardItems(data));
+    expect(sum).toBe(rankBoardItems(data).ready.length);
+  });
+});
+
+describe("groupBoardItems", () => {
+  const data = board(
+    desk("chief", [
+      item("chief-send", { type: "send", when: "anytime" }),
+      item("chief-decide", { type: "decide", reach: 2 }),
+    ]),
+    desk("eagle", [item("eagle-do", { type: "do" }), item("eagle-send", { type: "send" })]),
+  );
+  const ready = rankBoardItems(data).ready;
+  const shape = (grouping: BoardGrouping) =>
+    groupBoardItems(ready, grouping, data).map((group) => [
+      group.id,
+      group.rows.map((row) => row.item.id),
+    ]);
+
+  it("groups by priority, now first", () => {
+    expect(shape("priority")).toEqual([
+      ["now", ["chief-decide", "eagle-do", "eagle-send"]],
+      ["anytime", ["chief-send"]],
+    ]);
+  });
+
+  it("groups by type as Send, Decide, Do", () => {
+    expect(shape("type")).toEqual([
+      ["send", ["eagle-send", "chief-send"]],
+      ["decide", ["chief-decide"]],
+      ["do", ["eagle-do"]],
+    ]);
+  });
+
+  it("groups by bot in the board's desk order", () => {
+    const groups = groupBoardItems(ready, "bot", data);
+    expect(groups.map((group) => [group.id, group.desk?.name, group.rows.length])).toEqual([
+      ["chief", "Chief", 2],
+      ["eagle", "Eagle", 2],
+    ]);
+  });
+
+  it("keeps one ranked list when flat, or when everything shares one group", () => {
+    expect(shape("flat")).toEqual([[null, ready.map((row) => row.item.id)]]);
+    const onlyNow = ready.filter((row) => row.item.when === "now");
+    expect(groupBoardItems(onlyNow, "priority", data).map((group) => group.id)).toEqual([null]);
+    expect(groupBoardItems([], "type", data)).toEqual([]);
   });
 });
 

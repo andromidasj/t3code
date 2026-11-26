@@ -7,7 +7,7 @@ import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
 import { Toggle, ToggleGroup } from "~/components/ui/toggle-group";
 import { SortableSidebarMarker } from "~/components/sidebar/SidebarListMarkers";
-import { cn } from "~/lib/utils";
+import { cn, isMacPlatform } from "~/lib/utils";
 
 import { updateForkSettings, useForkSettings, type SidebarFilterPreset } from "./forkSettings";
 import {
@@ -47,37 +47,39 @@ export function SidebarFilterBar(props: {
       <div className="flex items-center gap-1">
         <ToggleGroup
           aria-label={gt("Filter threads")}
-          className="w-full"
+          className="flex w-full"
           value={[lens]}
           onValueChange={(next) => {
             const value = next[0];
             if (isSidebarFilterLens(value)) setLens(value);
           }}
         >
-          <Toggle value="all" className="flex-1">
+          <Toggle value="all" className={LENS_CLASS}>
             <T context="sidebar thread filter">All</T>
           </Toggle>
-          <Toggle value="mine" className="flex-1">
+          <Toggle value="mine" className={LENS_CLASS}>
             <T context="sidebar thread filter, the user's own threads">Mine</T>
           </Toggle>
           <Toggle
             value="needs-me"
-            className="flex-1"
+            className={LENS_CLASS}
             aria-label={
               props.needsMeCount > 0
                 ? gt("Needs me, {count} waiting", { count: props.needsMeCount })
                 : undefined
             }
           >
-            <T context="sidebar thread filter">Needs me</T>
-            {props.needsMeCount > 0 ? (
-              <span
-                aria-hidden
-                className="flex h-4 min-w-4 items-center justify-center rounded-full bg-warning/16 px-1 font-semibold text-2xs tabular-nums leading-none text-warning-foreground ring-1 ring-warning/40"
-              >
-                {props.needsMeCount > 99 ? "99+" : props.needsMeCount}
-              </span>
-            ) : null}
+            <span className="flex items-center gap-1">
+              <T context="sidebar thread filter">Needs me</T>
+              {props.needsMeCount > 0 ? (
+                <span
+                  aria-hidden
+                  className="flex h-4 min-w-4 items-center justify-center rounded-full bg-warning/16 px-1 font-semibold text-2xs tabular-nums leading-none text-warning-foreground ring-1 ring-warning/40"
+                >
+                  {props.needsMeCount > 99 ? "99+" : props.needsMeCount}
+                </span>
+              ) : null}
+            </span>
           </Toggle>
         </ToggleGroup>
       </div>
@@ -92,6 +94,9 @@ export function SidebarFilterBar(props: {
     </div>
   );
 }
+
+// Each option takes the room its label needs, so "Needs me 12" fits a narrow sidebar.
+const LENS_CLASS = "flex-auto shrink whitespace-nowrap";
 
 const CHIP_CLASS =
   "inline-flex h-6 max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-full border px-2.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
@@ -130,7 +135,6 @@ function SidebarProjectViews(props: {
               aria-pressed={active}
               className={cn(
                 CHIP_CLASS,
-                "pe-5",
                 active
                   ? "border-primary/40 bg-primary/10 text-sidebar-foreground"
                   : "border-sidebar-border text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
@@ -141,17 +145,18 @@ function SidebarProjectViews(props: {
             >
               <span className="truncate">{preset.name}</span>
             </button>
+            {/* Floats over the chip's corner, so the label stays centered and nothing shifts. */}
             <button
               type="button"
               aria-label={gt("Delete view {name}", { name: preset.name })}
-              className="absolute end-1 top-1/2 flex size-4 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-sidebar-muted-foreground opacity-0 hover:text-sidebar-foreground focus-visible:opacity-100 group-hover/chip:opacity-100"
+              className="absolute -end-1 -top-1 flex size-4 cursor-pointer items-center justify-center rounded-full border border-sidebar-border bg-popover text-muted-foreground opacity-0 shadow-xs outline-none hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring group-hover/chip:opacity-100 group-focus-within/chip:opacity-100"
               onClick={() =>
                 updateForkSettings({
                   sidebarFilterPresets: removeSidebarFilterPreset(presets, preset.id),
                 })
               }
             >
-              <XIcon className="size-3" />
+              <XIcon className="size-2.5" />
             </button>
           </span>
         );
@@ -205,6 +210,8 @@ function SidebarProjectViews(props: {
 /** The Bot / Background drawer's header, styled as the sidebar's shelves. */
 export function SidebarBotDrawerHeader(props: {
   readonly drawer: SidebarBotDrawer<unknown>;
+  /** The first of the bottom shelves, which takes the list's free space above it. */
+  readonly anchored: boolean;
   readonly onToggle: () => void;
 }) {
   const gt = useGT();
@@ -213,7 +220,7 @@ export function SidebarBotDrawerHeader(props: {
     <SortableSidebarMarker
       marker="bot-header"
       data-testid="sidebar-bot-header"
-      className="relative mx-0.5 h-8"
+      className={cn("relative mx-0.5 h-8", props.anchored && "mt-auto")}
     >
       <CollapsibleSectionHeader
         data-sidebar-row="shelf:bot"
@@ -242,5 +249,21 @@ export function SidebarBotDrawerHeader(props: {
         {gt("Bot / Background", { $context: "sidebar section of threads bots started" })}
       </CollapsibleSectionHeader>
     </SortableSidebarMarker>
+  );
+}
+
+/** The project menu's footer: how to pick more than one project. */
+export function ProjectScopeMultiSelectHint() {
+  return (
+    <div
+      className="border-t border-border px-3 py-1.5 text-muted-foreground text-xs"
+      data-testid="project-scope-multi-select-hint"
+    >
+      {isMacPlatform(navigator.platform) ? (
+        <T context="project menu hint">Shift or ⌘-click to select multiple</T>
+      ) : (
+        <T context="project menu hint">Shift or Ctrl-click to select multiple</T>
+      )}
+    </div>
   );
 }

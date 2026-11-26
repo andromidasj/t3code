@@ -8,18 +8,19 @@ import {
   addSidebarFilterPreset,
   applySidebarHierarchy,
   findSidebarFilterPreset,
+  isProjectScopeMultiSelectClick,
   isHumanThread,
   removeSidebarFilterPreset,
   renameSidebarFilterPreset,
   sidebarBotRows,
   sidebarDrawerCount,
-  sidebarFolderThreads,
   sidebarSettledCount,
   sidebarThreadKey,
   splitBotDrawerRows,
   threadNeedsMe,
   toggledPresetScope,
   withBotDrawerMarker,
+  withoutBotRows,
   type SidebarHierarchyThread,
   type SidebarPartitionLists,
 } from "./sidebarHierarchy";
@@ -222,9 +223,7 @@ describe("applySidebarHierarchy", () => {
 
   it("keeps drawer rows out of boring mode's folders", () => {
     const result = applySidebarHierarchy(base, { ...options, botExpanded: true });
-    expect(ids(sidebarFolderThreads(result.activeThreads, result.forkHierarchy))).toEqual([
-      "human",
-    ]);
+    expect(ids(withoutBotRows(result.activeThreads, result.forkHierarchy))).toEqual(["human"]);
     expect(ids(sidebarBotRows(result.activeThreads, result.forkHierarchy))).toEqual([
       "bot-running",
       "bot",
@@ -251,19 +250,37 @@ describe("drawer marker", () => {
     { kind: "marker", marker: "active-placeholder" },
   ];
 
-  it("goes before the first drawer row when open", () => {
+  const working: SidebarListItem[] = [
+    { kind: "marker", marker: "working-header" },
+    { kind: "thread", key: "working", section: "working" },
+  ];
+  const snoozed: SidebarListItem[] = [
+    { kind: "marker", marker: "snoozed-header" },
+    { kind: "thread", key: "snoozed", section: "snoozed" },
+  ];
+  const names = (items: readonly SidebarListItem[]) =>
+    items.map((item) => (item.kind === "marker" ? item.marker : item.key));
+
+  it("lists the open drawer below Working, right above Snoozed and Settled", () => {
     const view = applySidebarHierarchy(partition({ activeThreads: [human, bot] }), {
       ...options,
       botExpanded: true,
     }).forkHierarchy;
-    const items = withBotDrawerMarker([...head, row(human), row(bot), ...shelves], view);
-    expect(items.map((item) => (item.kind === "marker" ? item.marker : item.key))).toEqual([
+    const items = withBotDrawerMarker(
+      [...head, row(human), row(bot), ...working, ...snoozed, ...shelves],
+      view,
+    );
+    expect(names(items)).toEqual([
       "pinned-header",
       "pinned-divider",
       "active-placeholder",
       sidebarThreadKey(human),
+      "working-header",
+      "working",
       "bot-header",
       sidebarThreadKey(bot),
+      "snoozed-header",
+      "snoozed",
       "settled-header",
       "settled-placeholder",
     ]);
@@ -272,19 +289,32 @@ describe("drawer marker", () => {
     expect(split?.bot.map((entry) => entry.key)).toEqual([sidebarThreadKey(bot)]);
   });
 
-  it("goes before the shelves when closed", () => {
+  it("goes right above Settled when closed and nothing works or sleeps", () => {
     const view = applySidebarHierarchy(
       partition({ activeThreads: [human, bot] }),
       options,
     ).forkHierarchy;
     const items = withBotDrawerMarker([...head, row(human), ...shelves], view);
-    expect(items.findIndex((item) => item.kind === "marker" && item.marker === "bot-header")).toBe(
-      4,
-    );
+    expect(names(items).slice(3)).toEqual([
+      sidebarThreadKey(human),
+      "bot-header",
+      "settled-header",
+      "settled-placeholder",
+    ]);
   });
 
   it("leaves drag previews alone without a drawer", () => {
     expect(splitBotDrawerRows([...head, ...shelves], [])).toBeNull();
+  });
+});
+
+describe("project menu multi-select", () => {
+  it("toggles a project on Shift-, ⌘- or Ctrl-click and picks only it otherwise", () => {
+    const click = { shiftKey: false, metaKey: false, ctrlKey: false };
+    expect(isProjectScopeMultiSelectClick(click)).toBe(false);
+    expect(isProjectScopeMultiSelectClick({ ...click, shiftKey: true })).toBe(true);
+    expect(isProjectScopeMultiSelectClick({ ...click, metaKey: true })).toBe(true);
+    expect(isProjectScopeMultiSelectClick({ ...click, ctrlKey: true })).toBe(true);
   });
 });
 

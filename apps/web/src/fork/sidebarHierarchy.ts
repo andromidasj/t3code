@@ -202,8 +202,8 @@ export function applySidebarHierarchy<
   };
 }
 
-/** Boring mode's folders hold the user's threads; bot rows stay under the drawer. */
-export function sidebarFolderThreads<T extends SidebarHierarchyThread>(
+/** The user's own active rows: what the active list and boring mode's folders hold. */
+export function withoutBotRows<T extends SidebarHierarchyThread>(
   threads: readonly T[],
   view: SidebarHierarchyView<T>,
 ): readonly T[] {
@@ -211,7 +211,7 @@ export function sidebarFolderThreads<T extends SidebarHierarchyThread>(
   return threads.filter((thread) => !view.botRowKeys.has(sidebarThreadKey(thread)));
 }
 
-/** The bot rows boring mode lists after its folders. */
+/** The drawer's rows, listed after the Working shelf. */
 export function sidebarBotRows<T extends SidebarHierarchyThread>(
   threads: readonly T[],
   view: SidebarHierarchyView<T>,
@@ -234,28 +234,29 @@ export function sidebarDrawerCount(view: SidebarHierarchyView<unknown>): number 
   return view.drawer?.threads.length ?? 0;
 }
 
-const SHELF_HEADERS: ReadonlySet<string> = new Set([
-  "working-header",
-  "snoozed-header",
-  "settled-header",
-]);
+const LOWER_SHELF_HEADERS: ReadonlySet<string> = new Set(["snoozed-header", "settled-header"]);
 
-/** The list with the drawer's header before its first row, or before the shelves when closed. */
+/**
+ * The list with the drawer below the Working shelf: its header, then its rows, right above
+ * Snoozed and Settled.
+ */
 export function withBotDrawerMarker(
   items: readonly SidebarListItem[],
   view: SidebarHierarchyView<unknown>,
 ): readonly SidebarListItem[] {
   if (view.drawer === null || items.length === 0) return items;
-  let index = items.findIndex(
-    (item) =>
-      (item.kind === "thread" && item.section === "active" && view.botRowKeys.has(item.key)) ||
-      (item.kind === "marker" && SHELF_HEADERS.has(item.marker)),
+  const isBotRow = (item: SidebarListItem) =>
+    item.kind === "thread" && item.section === "active" && view.botRowKeys.has(item.key);
+  const rest = items.filter((item) => !isBotRow(item));
+  let index = rest.findIndex(
+    (item) => item.kind === "marker" && LOWER_SHELF_HEADERS.has(item.marker),
   );
-  if (index < 0) index = items.length;
+  if (index < 0) index = rest.length;
   return [
-    ...items.slice(0, index),
+    ...rest.slice(0, index),
     { kind: "marker", marker: "bot-header" },
-    ...items.slice(index),
+    ...items.filter(isBotRow),
+    ...rest.slice(index),
   ];
 }
 
@@ -281,6 +282,15 @@ export function splitBotDrawerRows<I extends { readonly key: string }>(
 }
 
 // Saved project views.
+
+/** A click that adds or removes a project in the project menu instead of picking only it. */
+export function isProjectScopeMultiSelectClick(event: {
+  readonly shiftKey: boolean;
+  readonly metaKey: boolean;
+  readonly ctrlKey: boolean;
+}): boolean {
+  return event.shiftKey || event.metaKey || event.ctrlKey;
+}
 
 export function sameProjectKeys(
   left: ReadonlyArray<string>,

@@ -6,7 +6,9 @@ import { T, useGT } from "gt-react";
 import {
   ArrowLeftIcon,
   ArrowUpRightIcon,
+  ChevronDownIcon,
   ChevronRightIcon,
+  CircleAlertIcon,
   ExternalLinkIcon,
   FileTextIcon,
   MessageSquareIcon,
@@ -25,8 +27,18 @@ import {
 import { PanelLayoutControls } from "~/components/chat/PanelLayoutControls";
 import ChatMarkdown from "~/components/ChatMarkdown";
 import { RelativeTime } from "~/components/RelativeTime";
+import * as Schema from "effect/Schema";
+
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import {
+  Menu,
+  MenuItemDetail,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuTrigger,
+} from "~/components/ui/menu";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { SidebarInset } from "~/components/ui/sidebar";
 import { Spinner } from "~/components/ui/spinner";
@@ -37,7 +49,9 @@ import { WorkspacePageContainer } from "~/components/WorkspacePageContainer";
 import { WorkspacePageHeader } from "~/components/WorkspacePageHeader";
 import { isCommandPaletteOpen } from "~/commandPaletteBus";
 import { isElectron } from "~/env";
+import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { usePrimarySettings } from "~/hooks/useSettings";
+import { useRelativeTimeState } from "~/hooks/useRelativeTimeState";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "~/keybindings";
 import { cn } from "~/lib/utils";
 import { readLocalApi } from "~/localApi";
@@ -49,6 +63,7 @@ import { primaryServerKeybindingsAtom } from "~/state/server";
 import { formatShortTimestamp } from "~/timestampFormat";
 
 import {
+  BOARD_GROUPINGS,
   boardDeskColors,
   boardDeskCounts,
   boardProjectKey,
@@ -59,10 +74,13 @@ import {
   deskProjectKeys,
   findBoardItem,
   findDeskThreadRef,
+  groupBoardItems,
   opensFullThread,
   plainBoardText,
   rankBoardItems,
   rewriteBoardThreadLinks,
+  type BoardGrouping,
+  type BoardItemGroup,
   type BoardItemRow,
   type BoardRow,
   type BoardSearch,
@@ -72,13 +90,10 @@ import {
   type BoardUrgency,
   type BoardView,
 } from "./board.logic";
-import { DeskBadge, ItemTypeBadge, NotReadyBadge, WhenBadge } from "./boardBadges";
+import { DeskBadge, ItemTypeBadge, WhenBadge } from "./boardBadges";
 import { useBoardData, type BoardDataHandle } from "./boardData";
-import {
-  BoardJobsCountBadge,
-  BoardScheduledJobsSection,
-  useBoardScheduledJobs,
-} from "./BoardScheduledJobsSection";
+import { BoardScheduledJobsSection, useBoardScheduledJobs } from "./BoardScheduledJobsSection";
+import { countFailedBoardJobs } from "./boardJobs";
 import { BoardItemDetailPanel } from "./BoardItemDetailPanel";
 import { useLeaveBoard } from "./boardNavigation";
 import {
@@ -108,6 +123,9 @@ import { normalizeBoardUrl, useForkSettings } from "./forkSettings";
 
 type ThreadOpener = (thread: BoardThreadInput, full: boolean) => void;
 
+const BOARD_GROUPING_KEY = "t3code:fork:board-grouping";
+const BoardGroupingSchema = Schema.Literals(BOARD_GROUPINGS);
+
 export function BoardPage() {
   const gt = useGT();
   const navigate = useNavigate();
@@ -123,6 +141,11 @@ export function BoardPage() {
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const panel = useBoardPanelStore();
+  const [grouping, setGrouping] = useLocalStorage<BoardGrouping, BoardGrouping>(
+    BOARD_GROUPING_KEY,
+    "priority",
+    BoardGroupingSchema,
+  );
 
   const data = board.data;
   const deskColors = boardDeskColors(data);
@@ -153,8 +176,9 @@ export function BoardPage() {
   const jobs = useBoardScheduledJobs(connectedIds, projectNames, filterProjectKeys);
   const items = rankBoardItems(data, filterDesk?.slug ?? null);
   const today = collectBoardToday(data, filterDesk?.slug ?? null);
-  const readyItemCount = items.ranked.filter((row) => row.item.banner === null).length;
-  const needsMeCount = model.needsMe.length + readyItemCount;
+  // One count everywhere: live threads waiting on the user plus ready Board items.
+  const needsMeCount = model.needsMe.length + items.ready.length;
+  const itemGroups = groupBoardItems(items.ready, grouping, data);
   const primaryConnectedId = connectedIds[0] ?? null;
 
   const view: BoardView =
@@ -330,31 +354,74 @@ export function BoardPage() {
     onOpenDesk: deskOpener(row),
   });
 
+  const headedGroups = itemGroups.some((group) => group.id !== null);
+  const liveRows = model.needsMe.map((row) => (
+    <BoardThreadRow
+      key={boardThreadKey(row.thread)}
+      row={row}
+      {...rowProps}
+      leading={<UrgencyDot urgency={row.urgency} />}
+      status={<UrgencyBadge urgency={row.urgency} />}
+      timestamp={row.thread.updatedAt}
+    />
+  ));
+  const folds =
+    items.notReady.length + items.later.length === 0 ? null : (
+      <>
+        {items.notReady.length === 0 ? null : (
+          <BoardItemFold
+            label={gt("Not ready", { $context: "board fold of items with nothing to do yet" })}
+            icon={<CircleAlertIcon className="size-3.5 text-warning" />}
+            rows={items.notReady}
+            selectedKey={activeItemKey}
+            rowProps={itemRowProps}
+          />
+        )}
+        {items.later.length === 0 ? null : (
+          <BoardItemFold
+            label={gt("Later", { $context: "board fold of items parked for later" })}
+            rows={items.later}
+            selectedKey={activeItemKey}
+            rowProps={itemRowProps}
+          />
+        )}
+      </>
+    );
   const needsMeSection = (
     <BoardSection
       title={gt("Needs me")}
       count={needsMeCount}
       empty={
-        model.needsMe.length + items.ranked.length + items.later.length === 0
-          ? gt("Nothing is waiting on you.")
-          : null
+        needsMeCount > 0
+          ? null
+          : folds === null
+            ? gt("Nothing is waiting on you.")
+            : gt("Nothing is ready for you right now.")
       }
+      footer={folds}
     >
-      {model.needsMe.map((row) => (
-        <BoardThreadRow
-          key={boardThreadKey(row.thread)}
-          row={row}
-          {...rowProps}
-          leading={<UrgencyDot urgency={row.urgency} />}
-          status={<UrgencyBadge urgency={row.urgency} />}
-          timestamp={row.thread.updatedAt}
-        />
-      ))}
-      {items.ranked.map((row) => (
-        <BoardItemListRow key={row.key} {...itemRowProps(row)} />
-      ))}
-      {items.later.length === 0 ? null : (
-        <LaterItems rows={items.later} selectedKey={activeItemKey} rowProps={itemRowProps} />
+      {liveRows.length > 0 && headedGroups ? (
+        <BoardGroupHeader label={gt("Live threads")} count={liveRows.length}>
+          {liveRows}
+        </BoardGroupHeader>
+      ) : (
+        liveRows
+      )}
+      {itemGroups.map((group) =>
+        group.id === null ? (
+          group.rows.map((row) => <BoardItemListRow key={row.key} {...itemRowProps(row)} />)
+        ) : (
+          <BoardGroupHeader
+            key={group.id}
+            label={boardGroupLabel(group, gt)}
+            color={group.desk === null ? undefined : deskColors.get(group.desk.slug)}
+            count={group.rows.length}
+          >
+            {group.rows.map((row) => (
+              <BoardItemListRow key={row.key} {...itemRowProps(row)} />
+            ))}
+          </BoardGroupHeader>
+        ),
       )}
     </BoardSection>
   );
@@ -451,47 +518,75 @@ export function BoardPage() {
               className="flex min-w-0 items-center gap-2 [-webkit-app-region:no-drag]"
               data-workspace-titlebar-controls
             >
-              {/* The views scroll when the panel narrows the header; the panel toggle stays put. */}
-              <div className="min-w-0 overflow-x-auto [scrollbar-width:none]">
-                <ToggleGroup
-                  aria-label={gt("Board view")}
-                  value={[view]}
-                  onValueChange={(next) => {
-                    const value = next[0] as BoardView | undefined;
-                    if (value === undefined) return;
-                    updateSearch({ boardView: value === "all" ? undefined : value });
-                  }}
-                >
-                  <Toggle value="all">
-                    <T context="board filter">All</T>
-                  </Toggle>
-                  <Toggle value="needs-me">
-                    <T>Needs me</T>
-                    <CountBadge count={needsMeCount} warn={model.needsMe.length > 0} />
-                  </Toggle>
-                  <Toggle value="running">
-                    <T context="board filter">Running</T>
-                    <CountBadge count={model.running.length} />
-                  </Toggle>
-                  {board.source === null ? null : (
-                    <Toggle value="today">
-                      <T context="board filter, what the bots did today">Today</T>
-                      <CountBadge count={today.length} />
-                    </Toggle>
-                  )}
-                  {jobs.total === 0 && view !== "jobs" ? null : (
-                    <Toggle value="jobs">
-                      <T context="board filter, scheduled tasks">Jobs</T>
-                      <BoardJobsCountBadge rows={jobs.rows} />
-                    </Toggle>
-                  )}
-                  {webUrl === null ? null : (
-                    <Toggle value="web">
-                      <T context="board filter, the bot board's own web page">Web</T>
-                    </Toggle>
-                  )}
-                </ToggleGroup>
-              </div>
+              <BoardHeaderMenu
+                label={gt("View", { $context: "board view menu" })}
+                value={view}
+                onChange={(value) =>
+                  updateSearch({ boardView: value === "all" ? undefined : value })
+                }
+                options={[
+                  { value: "all", label: gt("All", { $context: "board view" }) },
+                  {
+                    value: "needs-me",
+                    label: gt("Needs me"),
+                    detail: needsMeCount,
+                    warn: model.needsMe.length > 0,
+                  },
+                  {
+                    value: "running",
+                    label: gt("Running", { $context: "board view" }),
+                    detail: model.running.length,
+                  },
+                  ...(board.source === null
+                    ? []
+                    : [
+                        {
+                          value: "today" as const,
+                          label: gt("Today", { $context: "board view, what the bots did today" }),
+                          detail: today.length,
+                        },
+                      ]),
+                  ...(jobs.total === 0 && view !== "jobs"
+                    ? []
+                    : [
+                        {
+                          value: "jobs" as const,
+                          label: gt("Jobs", { $context: "board view, scheduled tasks" }),
+                          ...(countFailedBoardJobs(jobs.rows) > 0
+                            ? {
+                                detail: gt("{count} failed", {
+                                  count: countFailedBoardJobs(jobs.rows),
+                                }),
+                                error: true,
+                              }
+                            : { detail: jobs.rows.length }),
+                        },
+                      ]),
+                  ...(webUrl === null
+                    ? []
+                    : [
+                        {
+                          value: "web" as const,
+                          label: gt("Web", {
+                            $context: "board view, the bot board's own web page",
+                          }),
+                        },
+                      ]),
+                ]}
+              />
+              {view === "all" || view === "needs-me" ? (
+                <BoardHeaderMenu
+                  label={gt("Group", { $context: "board grouping menu" })}
+                  value={grouping}
+                  onChange={setGrouping}
+                  options={[
+                    { value: "priority", label: gt("Priority", { $context: "board grouping" }) },
+                    { value: "type", label: gt("Type", { $context: "board grouping" }) },
+                    { value: "bot", label: gt("Bot", { $context: "board grouping" }) },
+                    { value: "flat", label: gt("Flat", { $context: "board grouping" }) },
+                  ]}
+                />
+              ) : null}
               <PanelLayoutControls
                 showTerminalControl={false}
                 showThreadPanelControl={false}
@@ -543,7 +638,14 @@ export function BoardPage() {
                           style={{ background: deskColors.get(desk.slug) }}
                         />
                         {desk.name}
-                        <span className="text-muted-foreground tabular-nums">{count}</span>
+                        <span
+                          className={cn(
+                            "tabular-nums",
+                            count === 0 ? "text-muted-foreground/60" : "text-muted-foreground",
+                          )}
+                        >
+                          {count}
+                        </span>
                       </Toggle>
                     ))}
                   </ToggleGroup>
@@ -664,12 +766,59 @@ function selectedThreadTitle(
   return title === "" ? null : title;
 }
 
-function CountBadge({ count, warn = false }: { count: number; warn?: boolean }) {
-  if (count === 0) return null;
+interface BoardHeaderMenuOption<Value extends string> {
+  readonly value: Value;
+  readonly label: string;
+  /** The option's live count, or a short status. */
+  readonly detail?: number | string;
+  readonly warn?: boolean;
+  readonly error?: boolean;
+}
+
+/** A compact `Label: Value ▾` menu for the Board's header. */
+function BoardHeaderMenu<Value extends string>(props: {
+  label: string;
+  value: Value;
+  options: ReadonlyArray<BoardHeaderMenuOption<Value>>;
+  onChange: (value: Value) => void;
+}) {
+  const current = props.options.find((option) => option.value === props.value) ?? props.options[0];
+  if (!current) return null;
   return (
-    <Badge size="sm" variant={warn ? "warning" : "secondary"}>
-      {count}
-    </Badge>
+    <Menu>
+      <MenuTrigger
+        aria-label={`${props.label}: ${current.label}`}
+        render={<Button variant="outline" size="sm" />}
+        className="min-w-0 shrink-0"
+      >
+        <span className="text-muted-foreground">{props.label}:</span>
+        <span className="truncate">{current.label}</span>
+        <ChevronDownIcon aria-hidden className="size-3 shrink-0 text-muted-foreground/70" />
+      </MenuTrigger>
+      <MenuPopup align="end" side="bottom">
+        <MenuRadioGroup value={props.value} onValueChange={(next) => props.onChange(next as Value)}>
+          {props.options.map((option) => (
+            <MenuRadioItem key={option.value} value={option.value} closeOnClick>
+              <span className="flex min-w-0 items-center">
+                <span className="min-w-0 truncate">{option.label}</span>
+                {option.detail === undefined || option.detail === 0 ? null : (
+                  <MenuItemDetail>
+                    <span
+                      className={cn(
+                        option.error && "text-destructive-foreground",
+                        option.warn && "text-warning-foreground",
+                      )}
+                    >
+                      {option.detail}
+                    </span>
+                  </MenuItemDetail>
+                )}
+              </span>
+            </MenuRadioItem>
+          ))}
+        </MenuRadioGroup>
+      </MenuPopup>
+    </Menu>
   );
 }
 
@@ -749,6 +898,8 @@ function BoardSection(props: {
   /** Shown instead of the rows; null when there are rows. */
   empty: ReactNode;
   children: ReactNode;
+  /** Below the rows or the empty note, such as the Not ready and Later folds. */
+  footer?: ReactNode;
 }) {
   return (
     <section className="flex flex-col gap-2">
@@ -761,6 +912,7 @@ function BoardSection(props: {
       ) : (
         <div className="flex flex-col gap-0.5">{props.children}</div>
       )}
+      {props.footer ? <div className="flex flex-col gap-0.5">{props.footer}</div> : null}
     </section>
   );
 }
@@ -862,13 +1014,12 @@ function BoardItemListRow(props: BoardItemListRowProps) {
           <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground text-xs">
             {props.showDesk ? <DeskBadge desk={desk} color={props.color} /> : null}
             <ItemTypeBadge type={item.type} />
+            {item.when === "later" ? null : <WhenBadge when={item.when} />}
             <span className="truncate font-mono">{item.id}</span>
           </span>
         </span>
-        {item.banner === null ? null : <NotReadyBadge />}
-        <WhenBadge when={item.when} />
         <span className="w-14 shrink-0 text-right text-muted-foreground text-xs tabular-nums">
-          {item.checked === null ? null : <RelativeTime timestamp={item.checked} />}
+          {item.checked === null ? null : <CheckedTime timestamp={item.checked} />}
         </span>
       </button>
       {onOpenDesk === null ? null : (
@@ -882,12 +1033,74 @@ function BoardItemListRow(props: BoardItemListRowProps) {
   );
 }
 
-function LaterItems(props: {
+/** When a desk last checked an item, with the full wording on hover. */
+function CheckedTime({ timestamp }: { timestamp: string }) {
+  const gt = useGT();
+  const relative = useRelativeTimeState(timestamp);
+  if (relative.status !== "relative") return null;
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span />}>{relative.label}</TooltipTrigger>
+      <TooltipPopup side="top">
+        {gt("Checked {when}", {
+          $context: "when a bot last checked a board item",
+          when: relative.label,
+        })}
+      </TooltipPopup>
+    </Tooltip>
+  );
+}
+
+function boardGroupLabel(group: BoardItemGroup, gt: ReturnType<typeof useGT>): string {
+  if (group.desk !== null) return group.desk.name;
+  switch (group.id) {
+    case "now":
+      return gt("Do now", { $context: "board item priority" });
+    case "anytime":
+      return gt("Anytime", { $context: "board item priority" });
+    case "send":
+      return gt("Send", { $context: "board item type" });
+    case "decide":
+      return gt("Decide", { $context: "board item type" });
+    case "do":
+      return gt("Do", { $context: "board item type" });
+    case null:
+    case "":
+      return gt("Other", { $context: "board items without a priority or type" });
+    default:
+      return group.id;
+  }
+}
+
+/** A sub-header inside Needs me, for one priority, type or desk. */
+function BoardGroupHeader(props: {
+  label: string;
+  count: number;
+  color?: string | undefined;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5" role="group" aria-label={props.label}>
+      <h3 className="flex items-center gap-1.5 px-3 pt-2 pb-0.5 font-medium text-muted-foreground text-xs">
+        {props.color === undefined ? null : (
+          <span aria-hidden className="size-2 rounded-full" style={{ background: props.color }} />
+        )}
+        {props.label}
+        <span className="tabular-nums text-muted-foreground/70">{props.count}</span>
+      </h3>
+      {props.children}
+    </div>
+  );
+}
+
+/** A folded list below Needs me: items not ready yet, or parked for later. */
+function BoardItemFold(props: {
+  label: string;
+  icon?: ReactNode;
   rows: ReadonlyArray<BoardItemRow>;
   selectedKey: string | null;
   rowProps: (row: BoardItemRow) => BoardItemListRowProps;
 }) {
-  const gt = useGT();
   const holdsSelection = props.rows.some((row) => row.key === props.selectedKey);
   const [open, setOpen] = useState(false);
   const expanded = open || holdsSelection;
@@ -904,7 +1117,11 @@ function LaterItems(props: {
             className={cn("size-3.5 transition-transform", expanded && "rotate-90")}
           />
         </span>
-        <span>{gt("{count} later", { count: props.rows.length })}</span>
+        <span className="flex items-center gap-1.5">
+          {props.icon}
+          {props.label}
+          <span className="tabular-nums text-muted-foreground/70">{props.rows.length}</span>
+        </span>
       </button>
       {expanded
         ? props.rows.map((row) => <BoardItemListRow key={row.key} {...props.rowProps(row)} />)

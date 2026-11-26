@@ -8,7 +8,7 @@ import {
 import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
 import type * as Context from "effect/Context";
 import { expect, it, vi } from "vite-plus/test";
-import { page } from "vite-plus/test/browser";
+import { page, userEvent } from "vite-plus/test/browser";
 
 import "~/index.css";
 
@@ -110,12 +110,8 @@ it("shows scheduled job health on the Board, failed jobs first, with delivery an
   const { app, router } = await mountBoard();
   await using _app = app;
 
-  const jobsPill = page.getByRole("button", { name: /^Jobs/ });
-  await expect.element(jobsPill).toBeVisible();
-  // One failed job; gt-react wraps translated text in invisible marks, so match loosely.
-  await vi.waitFor(() =>
-    expect(jobsPill.element().querySelector('[data-slot="badge"]')?.textContent).toBe("1"),
-  );
+  const viewMenu = page.getByRole("button", { name: /^View:/ });
+  await expect.element(viewMenu).toBeVisible();
 
   // A failing job opens the strip at the bottom of All on its own.
   const strip = page.getByRole("button", { name: "Scheduled jobs" });
@@ -145,8 +141,13 @@ it("shows scheduled job health on the Board, failed jobs first, with delivery an
     expect(document.querySelectorAll('[data-testid="board-job-row"]')).toHaveLength(0),
   );
 
-  await jobsPill.click();
+  await viewMenu.click();
+  // One failed job; gt-react wraps translated text in invisible marks, so match loosely.
+  const jobsItem = page.getByRole("menuitemradio", { name: /^Jobs/ });
+  await vi.waitFor(() => expect(jobsItem.element().textContent).toMatch(/1 failed/));
+  await jobsItem.click();
   await vi.waitFor(() => expect(router.state.location.search).toMatchObject({ boardView: "jobs" }));
+  await expect.element(page.getByRole("button", { name: /^View:\s*Jobs/ })).toBeVisible();
   await vi.waitFor(() =>
     expect(document.querySelectorAll('[data-testid="board-job-row"]')).toHaveLength(3),
   );
@@ -173,7 +174,9 @@ it("keeps the jobs strip closed while nothing fails, and hides Jobs without task
   jobs.tasks = [];
   const second = await mountBoard();
   await using _app = second.app;
-  await expect.element(page.getByRole("button", { name: /^Needs me/ })).toBeVisible();
-  expect(page.getByRole("button", { name: /^Jobs/ }).elements()).toHaveLength(0);
+  await page.getByRole("button", { name: /^View:/ }).click();
+  await expect.element(page.getByRole("menuitemradio", { name: /^Needs me/ })).toBeVisible();
+  expect(page.getByRole("menuitemradio", { name: /^Jobs/ }).elements()).toHaveLength(0);
+  await userEvent.keyboard("{Escape}");
   expect(document.querySelector('[data-testid="board-jobs-section"]')).toBeNull();
 });

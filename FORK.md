@@ -32,8 +32,13 @@ keeps your sign-in, settings and threads.
      turns into one "Bot activity" strip; running, failed, waiting and 👉 turns stay open.
      "Sidebar filter and Bot / Background" (on by default) adds All | Mine | Needs me under the
      sidebar's pages and folds threads bots started that you never wrote in (no 👉 title, nothing
-     waiting on you) into a collapsible Bot / Background section. With projects picked in the
-     sidebar's project menu, "Save view" keeps that set as a chip; rename or delete views here.
+     waiting on you) into a collapsible Bot / Background shelf above Snoozed and Settled. Shift-,
+     ⌘- or Ctrl-click in the sidebar's project menu picks several projects; with projects
+     picked, "Save view" keeps that set as a chip; rename or delete views here.
+   - Board: the header's View and Group menus pick what shows. Needs me counts live threads
+     waiting on you plus ready bot-desk items, the same number as the sidebar's Board button and
+     the bot chips; items not ready yet and later ones fold below it. Group (kept on this Mac)
+     sorts ready items by priority, type, bot or not at all.
    - Settings → Scheduled tasks: each task's Delivery (Silent, Updates only, Always) is stored as a
      trailing `[t3-delivery: <mode>]` line on its prompt, which the agent reads and the app hides.
      Silent and Updates only skip the "Thread completed" notice for that task's runs on this Mac;

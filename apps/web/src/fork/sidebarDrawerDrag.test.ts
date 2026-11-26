@@ -16,7 +16,7 @@ const thread = (key: string, section: SidebarSection): SidebarListItem => ({
 });
 const marker = (name: SidebarListMarker): SidebarListItem => ({ kind: "marker", marker: name });
 
-const items: SidebarListItem[] = [
+const baseItems: SidebarListItem[] = [
   marker("pinned-header"),
   thread("pinned", "pinned"),
   marker("pinned-divider"),
@@ -28,7 +28,15 @@ const items: SidebarListItem[] = [
   marker("settled-placeholder"),
 ];
 
-function preview(active: string, over: string) {
+// The drawer sits below the Working shelf when there is one.
+const workingItems: SidebarListItem[] = [
+  ...baseItems.slice(0, 5),
+  marker("working-header"),
+  thread("working", "working"),
+  ...baseItems.slice(5),
+];
+
+function preview(active: string, over: string, items = baseItems) {
   let top = 100;
   const rects = items.map((item) => {
     const height =
@@ -76,5 +84,14 @@ describe("drag preview with the Bot / Background drawer", () => {
     // The pinned card leaves the top, and the drawer stays below the user's rows.
     expect(header?.y).toBe(bot?.y);
     expect(moved.get("human")?.y).toBeLessThan(0);
+  });
+
+  it("keeps the drawer below Working while rows move above it", () => {
+    for (const [id, transform] of preview("human", "human", workingItems)) {
+      expect({ id, y: transform?.y, scaleY: transform?.scaleY }).toEqual({ id, y: 0, scaleY: 1 });
+    }
+    const moved = preview("pinned", "human-2", workingItems);
+    expect(moved.get("sidebar-marker-bot-header")?.y).toBe(moved.get("working")?.y);
+    expect(moved.get("bot")?.y).toBe(moved.get("working")?.y);
   });
 });

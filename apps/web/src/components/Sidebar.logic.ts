@@ -242,7 +242,8 @@ function sectionAtSidebarSlot(items: readonly SidebarListItem[], index: number):
     const item = items[i]!;
     if (item.kind !== "marker") continue;
     if (item.marker === "pinned-divider") section = "active";
-    else if (item.marker === "working-header") section = "working";
+    // Fork: the Bot / Background drawer below Working takes no drops either.
+    else if (item.marker === "working-header" || item.marker === "bot-header") section = "working";
     else if (item.marker === "snoozed-header") section = "snoozed";
     else if (item.marker === "settled-header") section = "settled";
   }
@@ -275,6 +276,7 @@ export function resolveSidebarDropTarget(
       if (item.marker === "pinned-divider") currentSection = "active";
       else if (
         item.marker === "working-header" ||
+        item.marker === "bot-header" ||
         item.marker === "snoozed-header" ||
         item.marker === "settled-header"
       )

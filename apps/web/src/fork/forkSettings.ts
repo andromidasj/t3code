@@ -43,6 +43,10 @@ export interface ForkSettings {
   readonly spaces: ReadonlyArray<SidebarSpace>;
   readonly defaultSpaceId: string | null;
   readonly activeSpaceId: string | null;
+  /** Projects (bots) listed first in the composer's `@` menu; a pick inserts `@Name `. */
+  readonly composerProjectMentions: boolean;
+  /** Leave workspace files and folders out of the composer's `@` menu, and skip their search. */
+  readonly hideComposerWorkspaceFiles: boolean;
 }
 
 export const FORK_SETTINGS_STORAGE_KEY = "t3code:fork:settings:v1";
@@ -60,6 +64,8 @@ export const DEFAULT_FORK_SETTINGS: ForkSettings = {
   spaces: [],
   defaultSpaceId: null,
   activeSpaceId: null,
+  composerProjectMentions: true,
+  hideComposerWorkspaceFiles: true,
 };
 
 type ForkSettingsStorage = Pick<Storage, "getItem" | "setItem">;
@@ -221,6 +227,14 @@ function parseForkSettings(raw: string | null): ForkSettings {
     spaces: normalizeSidebarSpaces(record.spaces),
     defaultSpaceId: typeof record.defaultSpaceId === "string" ? record.defaultSpaceId : null,
     activeSpaceId: typeof record.activeSpaceId === "string" ? record.activeSpaceId : null,
+    composerProjectMentions:
+      typeof record.composerProjectMentions === "boolean"
+        ? record.composerProjectMentions
+        : DEFAULT_FORK_SETTINGS.composerProjectMentions,
+    hideComposerWorkspaceFiles:
+      typeof record.hideComposerWorkspaceFiles === "boolean"
+        ? record.hideComposerWorkspaceFiles
+        : DEFAULT_FORK_SETTINGS.hideComposerWorkspaceFiles,
   };
 }
 

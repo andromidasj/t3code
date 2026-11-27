@@ -50,6 +50,8 @@ import {
 } from "../pullRequest/pullRequestList.logic";
 import type { ComposerCommandItem } from "./ComposerCommandMenu";
 import { matchComposerModelItems } from "./composerModelMentions";
+import { useForkSettings } from "~/fork/forkSettings";
+import { useComposerProjectMentionItems } from "~/fork/useComposerProjectMentions";
 import type { ModelEsque } from "./providerIconUtils";
 import type { ProviderInstanceEntry } from "../../providerInstances";
 import {
@@ -141,11 +143,17 @@ export function useComposerMenuItems({
     ...identity,
     machine: environmentMachines.get(identity.environmentId) ?? ("server" as const),
   }));
+  // Fork: projects lead the `@` menu, and workspace files can be left out (no search runs).
+  const projectMentionItems = useComposerProjectMentionItems(
+    isPathTrigger ? pathTriggerQuery : null,
+  );
+  const hideWorkspaceFiles = useForkSettings().hideComposerWorkspaceFiles;
+  const searchWorkspaceFiles = isPathTrigger && !hideWorkspaceFiles;
   const workspaceEntries = useComposerPathSearch(
     {
       environmentId,
-      cwd: isPathTrigger ? gitCwd : null,
-      query: isPathTrigger ? pathTriggerQuery : null,
+      cwd: searchWorkspaceFiles ? gitCwd : null,
+      query: searchWorkspaceFiles ? pathTriggerQuery : null,
     },
     messages,
   );
@@ -212,6 +220,7 @@ export function useComposerMenuItems({
     if (!composerTrigger) return [];
     if (composerTrigger.kind === "path") {
       return [
+        ...projectMentionItems,
         ...matchComposerThreadItems(
           {
             shells: environmentThreadShells,
@@ -443,6 +452,9 @@ export function useComposerMenuItems({
       return composerTrigger?.query
         ? gt("No pull request matches {query}.", { query: composerTrigger.query })
         : gt("No pull requests found in this repository.");
+    }
+    if (composerTriggerKind === "path" && hideWorkspaceFiles) {
+      return gt("No matching projects, threads or models.");
     }
     return composerTriggerKind === "path"
       ? gt("No matching files or folders.")

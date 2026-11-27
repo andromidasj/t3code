@@ -30,13 +30,16 @@ import { memo, useLayoutEffect, useRef, useState } from "react";
 import { type ComposerSlashCommand, type ComposerTriggerKind } from "../../composer-logic";
 import { cn } from "~/lib/utils";
 import { Badge } from "../ui/badge";
-import { Command, CommandGroup, CommandItem, CommandList } from "../ui/command";
+import { Command, CommandItem, CommandList } from "../ui/command";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { EnvironmentMachineIcon } from "../EnvironmentMachineIcon";
 import { PierreEntryIcon } from "./PierreEntryIcon";
 import { ProviderInstanceIcon } from "./ProviderInstanceIcon";
 import { ComposerBanner } from "./ComposerBanner";
 import { resolvePullRequestState } from "../pullRequest/pullRequestPresentation";
+import { ProjectFavicon } from "../ProjectFavicon";
+import type { ComposerProjectMentionItem } from "~/fork/composerProjectMentions";
+import { ComposerProjectMentionGroups } from "~/fork/ComposerProjectMentionGroups";
 
 export type ComposerCommandItem =
   | {
@@ -104,7 +107,8 @@ export type ComposerCommandItem =
       acpRegistryIconUrl: string | undefined;
       label: string;
       description: string;
-    };
+    }
+  | ComposerProjectMentionItem;
 
 export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
   listId: string;
@@ -173,8 +177,9 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
             className="min-h-0 scroll-pb-6"
             scrollAreaClassName="max-h-72"
           >
-            <CommandGroup>
-              {props.items.map((item) => (
+            <ComposerProjectMentionGroups
+              items={props.items}
+              renderItem={(item) => (
                 <ComposerCommandMenuItem
                   key={item.id}
                   optionId={composerSuggestionOptionId(props.listId, item.id)}
@@ -186,8 +191,8 @@ export const ComposerCommandMenu = memo(function ComposerCommandMenu(props: {
                   onHighlight={props.onHighlightedItemChange}
                   onSelect={props.onSelect}
                 />
-              ))}
-            </CommandGroup>
+              )}
+            />
           </CommandList>
         ) : (
           <div className="px-5 pt-3.5 pb-7">
@@ -262,6 +267,9 @@ const ComposerCommandMenuItem = memo(function ComposerCommandMenuItem(props: {
           kind={props.item.pathKind}
           theme={props.resolvedTheme}
         />
+      ) : null}
+      {props.item.type === "fork-project" ? (
+        <ProjectFavicon project={props.item.project} className="size-4 shrink-0" />
       ) : null}
       {props.item.type === "thread" ? (
         <MessagesSquareIcon aria-hidden="true" className="size-4 shrink-0 text-secondary-label" />

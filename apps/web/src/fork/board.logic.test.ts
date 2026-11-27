@@ -333,6 +333,8 @@ describe("fork settings storage", () => {
       spaces: [],
       defaultSpaceId: null,
       activeSpaceId: null,
+      composerProjectMentions: true,
+      hideComposerWorkspaceFiles: true,
     };
     expect(readForkSettings(storage)).toEqual(expected);
     expect(JSON.parse(storage.values.get(FORK_SETTINGS_STORAGE_KEY) ?? "null")).toEqual(expected);

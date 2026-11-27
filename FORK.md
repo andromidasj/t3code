@@ -56,6 +56,11 @@ keeps your sign-in, settings and threads.
      The ••• next to the Space's name edits its name, icon, tint and projects; + on the strip
      adds a Space. While on, it replaces the project menu, saved views and the Bot Dock.
      Spaces are saved on this Mac only.
+     "Show projects & bots in @ mentions" (on by default) lists projects (one per sidebar group,
+     across environments, not archived) under "Projects & bots" at the top of the composer's `@`
+     menu, the shown Space's and pinned ones first; picking one types plain `@Name `.
+     "Hide workspace files from @ mentions" (on by default) leaves files and folders out of
+     that menu and skips their search; threads, machines and models stay.
    - Board: the header's View and Group menus pick what shows. Needs me counts live threads
      waiting on you plus ready bot-desk items, the same number as the sidebar's Board button and
      the bot chips; items not ready yet and later ones fold below it. Group (kept on this Mac)
@@ -107,3 +112,4 @@ reinstalls the current release.
 | Arc-style Spaces sidebar with pinned thread grids  | none (fork-only)           | upstream ships sidebar spaces          |
 | Spaces swipe-back, strip pill and slide polish     | none (fork-only)           | the Spaces patch is dropped            |
 | Keep bot turns with questions or new handoffs open | none (fork-only)           | the folding patch is dropped           |
+| Projects & bots in `@` mentions; hide files        | none (fork-only)           | upstream mentions projects with `@`    |

@@ -311,6 +311,7 @@ import {
 import { HELD_COMPOSER_SEND_BANNER_ID } from "./ComposerHeldSendBanner";
 import { ComposerControlsBar } from "./ComposerControlsBar";
 import { composerCommandKeyHandler } from "./composerCommandKey";
+import { composerProjectMentionText } from "~/fork/composerProjectMentions";
 import { promptSuggestionToAccept, usePromptSuggestion } from "./usePromptSuggestion";
 import { useFreshSessionArmed } from "./freshSessionArms";
 
@@ -2240,6 +2241,20 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       if (applied) {
         setComposerHighlightedItemId(null);
       }
+      return;
+    }
+    if (item.type === "fork-project") {
+      if (trigger.kind !== "path") return;
+      const replacement = composerProjectMentionText(item);
+      const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
+        snapshot.value,
+        trigger.rangeEnd,
+        replacement,
+      );
+      const applied = applyPromptReplacement(trigger.rangeStart, replacementRangeEnd, replacement, {
+        expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd),
+      });
+      if (applied) setComposerHighlightedItemId(null);
       return;
     }
     if (item.type === "environment") {

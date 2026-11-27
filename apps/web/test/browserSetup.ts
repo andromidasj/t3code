@@ -21,7 +21,7 @@ declare module "vite-plus/test/browser" {
 // running and can move the mouse after its own afterEach.
 beforeEach(async () => {
   await commands.resetPointer();
-  // Fork: upstream tests expect upstream timelines and sidebars; fork tests turn these on.
+  // Fork: upstream tests expect upstream timelines, sidebars and `@` menus; fork tests turn these on.
   localStorage.setItem(
     FORK_SETTINGS_STORAGE_KEY,
     JSON.stringify({
@@ -29,6 +29,8 @@ beforeEach(async () => {
       sidebarHierarchyEnabled: false,
       botDockEnabled: false,
       spacesEnabled: false,
+      composerProjectMentions: false,
+      hideComposerWorkspaceFiles: false,
     }),
   );
 });

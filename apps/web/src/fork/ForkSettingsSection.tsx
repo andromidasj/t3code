@@ -146,6 +146,38 @@ export function ForkSettingsSection() {
           />
         }
       />
+      <SettingsRow
+        devicePreference
+        title={gt("Show projects & bots in @ mentions")}
+        description={gt(
+          "List projects first in the composer's @ menu; picking one types @Name so the agent knows which bot you mean.",
+        )}
+        control={
+          <Switch
+            checked={settings.composerProjectMentions}
+            onCheckedChange={(checked) =>
+              updateForkSettings({ composerProjectMentions: Boolean(checked) })
+            }
+            aria-label={gt("Show projects & bots in @ mentions")}
+          />
+        }
+      />
+      <SettingsRow
+        devicePreference
+        title={gt("Hide workspace files from @ mentions")}
+        description={gt(
+          "Leave files and folders out of the composer's @ menu; threads, machines and models stay.",
+        )}
+        control={
+          <Switch
+            checked={settings.hideComposerWorkspaceFiles}
+            onCheckedChange={(checked) =>
+              updateForkSettings({ hideComposerWorkspaceFiles: Boolean(checked) })
+            }
+            aria-label={gt("Hide workspace files from @ mentions")}
+          />
+        }
+      />
       {settings.sidebarFilterPresets.length > 0 ? (
         <SettingsRow
           devicePreference

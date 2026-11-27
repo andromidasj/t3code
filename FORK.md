@@ -29,7 +29,9 @@ keeps your sign-in, settings and threads.
      output: its web address (e.g. `https://host:8447/`) or its folder on this Mac (e.g.
      `~/dev/bot/.board`). The desktop app reads `data.json` there, or the data `index.html` embeds.
      "Collapse routine bot updates" (on by default) folds finished agent-to-agent and scheduled
-     turns into one "Bot activity" strip; running, failed, waiting and 👉 turns stay open.
+     turns into one "Bot activity" strip; running, failed, waiting and 👉 turns stay open, as
+     does any reply with a question (a `?` outside code and links) and the newest handoff from
+     another bot unless its reply starts with 🤖 or `FYI:` or only says there is nothing new.
      "Sidebar filter and Bot / Background" (on by default) adds All | Needs me under the
      sidebar's pages and folds threads bots started that you never wrote in (no 👉 title, nothing
      waiting on you) into a collapsible Bot / Background shelf above Snoozed and Settled. Shift-,
@@ -86,20 +88,22 @@ reinstalls the current release.
 
 ## Patches
 
-| Patch                                             | Upstream                   | Drop when                              |
-| ------------------------------------------------- | -------------------------- | -------------------------------------- |
-| Restore macOS cursor auto-hide while typing       | reverts part of c2d44a312c | upstream hides the cursor while typing |
-| Bindable `chat.citeSelection` command             | PR #34656                  | that PR or an equivalent merges        |
-| "Open in new threads" setting for Thread details  | PR #25598                  | that PR or an equivalent merges        |
-| ⌘⌥←/→ switch to the next/previous right panel tab | PR #34437                  | that PR or an equivalent merges        |
-| ⌘⌥1–9 jump to a right panel tab (9 = last)        | none (fork-only)           | upstream ships tab jump shortcuts      |
-| PR links open via any environment with the repo   | none (fork-only)           | upstream resolves links across envs    |
-| Board view (`/board`, ⌥⇧⌘B) and per-Mac settings  | none (fork-only)           | upstream ships a cross-thread board    |
-| Board shows bot-desk items, Today and details     | none (fork-only)           | the Board patch is dropped             |
-| Board right panel, sidebar pages, "Open in" desk  | none (fork-only)           | the Board patch is dropped             |
-| Collapse routine bot updates in threads           | none (fork-only)           | upstream folds agent-to-agent turns    |
-| Scheduled task delivery modes                     | none (fork-only)           | upstream ships per-task notify modes   |
-| Sidebar All/Needs me, Bot / Background            | none (fork-only)           | upstream separates bot threads         |
-| Scheduled jobs health on the Board (Jobs)         | none (fork-only)           | the Board patch is dropped             |
-| Bot Dock; project scope follows delegated threads | none (fork-only)           | upstream ships a pinned-project dock   |
-| Arc-style Spaces sidebar with pinned thread grids | none (fork-only)           | upstream ships sidebar spaces          |
+| Patch                                              | Upstream                   | Drop when                              |
+| -------------------------------------------------- | -------------------------- | -------------------------------------- |
+| Restore macOS cursor auto-hide while typing        | reverts part of c2d44a312c | upstream hides the cursor while typing |
+| Bindable `chat.citeSelection` command              | PR #34656                  | that PR or an equivalent merges        |
+| "Open in new threads" setting for Thread details   | PR #25598                  | that PR or an equivalent merges        |
+| ⌘⌥←/→ switch to the next/previous right panel tab  | PR #34437                  | that PR or an equivalent merges        |
+| ⌘⌥1–9 jump to a right panel tab (9 = last)         | none (fork-only)           | upstream ships tab jump shortcuts      |
+| PR links open via any environment with the repo    | none (fork-only)           | upstream resolves links across envs    |
+| Board view (`/board`, ⌥⇧⌘B) and per-Mac settings   | none (fork-only)           | upstream ships a cross-thread board    |
+| Board shows bot-desk items, Today and details      | none (fork-only)           | the Board patch is dropped             |
+| Board right panel, sidebar pages, "Open in" desk   | none (fork-only)           | the Board patch is dropped             |
+| Collapse routine bot updates in threads            | none (fork-only)           | upstream folds agent-to-agent turns    |
+| Scheduled task delivery modes                      | none (fork-only)           | upstream ships per-task notify modes   |
+| Sidebar All/Needs me, Bot / Background             | none (fork-only)           | upstream separates bot threads         |
+| Scheduled jobs health on the Board (Jobs)          | none (fork-only)           | the Board patch is dropped             |
+| Bot Dock; project scope follows delegated threads  | none (fork-only)           | upstream ships a pinned-project dock   |
+| Arc-style Spaces sidebar with pinned thread grids  | none (fork-only)           | upstream ships sidebar spaces          |
+| Spaces swipe-back, strip pill and slide polish     | none (fork-only)           | the Spaces patch is dropped            |
+| Keep bot turns with questions or new handoffs open | none (fork-only)           | the folding patch is dropped           |

@@ -240,6 +240,33 @@ export function flagsUser(text: string): boolean {
   return text.includes("👉") || text.includes("⚠️");
 }
 
+const FENCED_CODE = /```[\s\S]*?(?:```|$)/g;
+const INLINE_CODE = /`[^`\n]*`/g;
+const LINK = /https?:\/\/\S+/g;
+
+/** A `?` in the reply's prose, outside code and links, is a question for the user. */
+export function asksUserQuestion(text: string): boolean {
+  return text.replace(FENCED_CODE, "").replace(INLINE_CODE, "").replace(LINK, "").includes("?");
+}
+
+const ROUTINE_MARKER = /^(?:🤖|fyi:)/iu;
+const ZERO_SIGNAL_ACK =
+  /^(?:nothing new|nothing to report|no changes?|no updates?|all clear|all quiet|sent to the main thread)[.!]*$/i;
+
+/** A reply that marks itself routine (`🤖`, `FYI:`) or only acknowledges with nothing new. */
+export function isExplicitRoutineReply(text: string): boolean {
+  const trimmed = text.trim();
+  return ROUTINE_MARKER.test(trimmed) || ZERO_SIGNAL_ACK.test(trimmed);
+}
+
+function assistantTexts(turn: TimelineTurn): ReadonlyArray<string> {
+  return turn.rows.flatMap((row) =>
+    row.kind === "message" && row.message.role === "assistant" && row.message.text.trim() !== ""
+      ? [row.message.text]
+      : [],
+  );
+}
+
 /** Inline visuals, messages sent to the user, and media or file attachments are never routine. */
 function hasVisualContent(turn: TimelineTurn): boolean {
   return turn.rows.some(
@@ -280,19 +307,19 @@ function isRoutineAgentTurn(
   isLast: boolean,
   context: AgentTurnFoldingContext,
 ): boolean {
-  if (agentTurnSender(turn.opener) === null) return false;
+  const sender = agentTurnSender(turn.opener);
+  if (sender === null) return false;
   if (isActive(turn, isLast, context)) return false;
   if (isFailed(turn, context)) return false;
   if (needsUser(turn, context)) return false;
   if (isAlwaysDelivery(turn, context)) return false;
   if (hasVisualContent(turn)) return false;
-  if (
-    turn.rows.some(
-      (row) =>
-        row.kind === "message" && row.message.role === "assistant" && flagsUser(row.message.text),
-    )
-  ) {
-    return false;
+  const replies = assistantTexts(turn);
+  if (replies.some((text) => flagsUser(text) || asksUserQuestion(text))) return false;
+  // The newest handoff from another bot stays open unless its reply says it is routine.
+  if (isLast && sender.kind === "agent") {
+    const latestReply = replies.at(-1);
+    if (latestReply === undefined || !isExplicitRoutineReply(latestReply)) return false;
   }
   return !isPinned(turn, context.pinnedIds);
 }

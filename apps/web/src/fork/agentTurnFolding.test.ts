@@ -5,8 +5,10 @@ import type { MessagesTimelineRow } from "~/components/chat/MessagesTimeline.log
 
 import {
   agentTurnFoldId,
+  asksUserQuestion,
   flagsUser,
   foldAgentTurns,
+  isExplicitRoutineReply,
   reuseFoldRows,
   splitTimelineTurns,
   type AgentTurnFoldRow,
@@ -152,7 +154,7 @@ describe("foldAgentTurns", () => {
   });
 
   it("folds a single routine turn", () => {
-    const folded = foldAgentTurns([agent("g1"), reply("a1", "FYI")], NONE);
+    const folded = foldAgentTurns([agent("g1"), reply("a1", "FYI: filed")], NONE);
     expect(folds(folded)).toHaveLength(1);
     expect(folds(folded)[0]!.turnCount).toBe(1);
   });
@@ -163,7 +165,7 @@ describe("foldAgentTurns", () => {
   });
 
   it("splits groups around a human turn", () => {
-    const rows = [agent("g1"), reply("a1", "x"), human("u1"), agent("g2"), reply("a2", "y")];
+    const rows = [agent("g1"), reply("a1", "x"), human("u1"), agent("g2"), reply("a2", "FYI: y")];
     const folded = foldAgentTurns(rows, NONE);
     expect(ids(folded)).toEqual([agentTurnFoldId("g1"), "u1", agentTurnFoldId("g2")]);
   });
@@ -177,13 +179,13 @@ describe("foldAgentTurns", () => {
   });
 
   it("previews the opening prompt when the turn has no reply yet", () => {
-    const folded = foldAgentTurns([agent("g1", "\n  Please file this\nmore")], NONE);
+    const folded = foldAgentTurns([agent("g1", "\n  Please file this\nmore"), human("u1")], NONE);
     expect(folds(folded)[0]!.preview).toBe("Please file this");
   });
 
   it("dates the strip by the newest row in the group", () => {
     const later = "2026-11-25T11:30:00.000Z";
-    const folded = foldAgentTurns([agent("g1"), reply("a1", "x", {}, later)], NONE);
+    const folded = foldAgentTurns([agent("g1"), reply("a1", "FYI: x", {}, later)], NONE);
     expect(folds(folded)[0]!.latestAt).toBe(later);
   });
 
@@ -244,7 +246,7 @@ describe("foldAgentTurns", () => {
         fold([agent("g1"), approval], { ...NONE, pendingApprovalRequestIds: new Set(["req-1"]) }),
       ).toEqual([]);
       // An answered approval no longer holds the turn open.
-      expect(fold([agent("g1"), approval])).toHaveLength(1);
+      expect(fold([agent("g1"), approval, human("u1")])).toHaveLength(1);
       expect(
         fold([agent("g1"), event("q1", { type: "user_input_request", status: "waiting" })]),
       ).toEqual([]);
@@ -319,9 +321,54 @@ describe("foldAgentTurns", () => {
 
     it("it holds the cited message", () => {
       expect(
-        fold([agent("g1"), reply("a1", "x")], { ...NONE, pinnedIds: new Set(["a1"]) }),
+        fold([agent("g1"), reply("a1", "FYI: x")], { ...NONE, pinnedIds: new Set(["a1"]) }),
       ).toEqual([]);
     });
+
+    it("the reply asks the user a question, at any position", () => {
+      const tail = [human("u1"), reply("a9", "ok")];
+      expect(
+        fold([agent("g1"), reply("a1", "Status is green. Should I renew it?"), ...tail]),
+      ).toEqual([]);
+      expect(
+        fold([automation("j1"), reply("a1", "Two drives qualify. Want the cheaper one?"), ...tail]),
+      ).toEqual([]);
+      expect(fold([agent("g1"), reply("a1", "🤖 FYI: renew now or wait?")])).toEqual([]);
+    });
+
+    it("it is the newest handoff from another bot and not marked routine", () => {
+      const handoff = reply("a1", "Arlo finished the import. 12 movies added, 2 need subtitles.");
+      expect(fold([agent("g1"), handoff])).toEqual([]);
+      // The same turn folds once newer conversation follows it.
+      expect(fold([agent("g1"), handoff, human("u1"), reply("a2", "ok")])).toHaveLength(1);
+      // A newest handoff with no reply yet stays open too.
+      expect(fold([agent("g1", "Here is the import report.")])).toEqual([]);
+    });
+  });
+
+  it("folds the newest bot handoff when its reply is marked routine", () => {
+    expect(
+      folds(foldAgentTurns([agent("g1"), reply("a1", "🤖 FYI: filed it")], NONE)),
+    ).toHaveLength(1);
+    expect(folds(foldAgentTurns([agent("g1"), reply("a1", "fyi: filed it")], NONE))).toHaveLength(
+      1,
+    );
+    expect(folds(foldAgentTurns([agent("g1"), reply("a1", "Nothing new.")], NONE))).toHaveLength(1);
+    // Scheduled check-ins fold as the newest turn without a marker.
+    expect(folds(foldAgentTurns([automation("j1"), reply("a1", "Backup OK.")], NONE))).toHaveLength(
+      1,
+    );
+  });
+
+  it("ignores a ? inside code or a link", () => {
+    const rows = [
+      agent("g1"),
+      reply("a1", "FYI: filed at https://papra.example/doc?id=42 with `grep -c '?'`"),
+      agent("g2"),
+      reply("a2", "FYI: ran\n```sh\ncurl 'x?y'\n```"),
+    ];
+    expect(ids(foldAgentTurns(rows, NONE))).toEqual([agentTurnFoldId("g1")]);
+    expect(folds(foldAgentTurns(rows, NONE))[0]!.turnCount).toBe(2);
   });
 
   it("keeps routine neighbours folded around a turn that stays open", () => {
@@ -331,7 +378,7 @@ describe("foldAgentTurns", () => {
       agent("g2"),
       reply("a2", "👉 Needs you"),
       agent("g3"),
-      reply("a3", "z"),
+      reply("a3", "🤖 FYI: z"),
     ];
     expect(ids(foldAgentTurns(rows, NONE))).toEqual([
       agentTurnFoldId("g1"),
@@ -353,14 +400,50 @@ describe("flagsUser", () => {
   });
 });
 
+describe("asksUserQuestion", () => {
+  it("finds a ? in prose only", () => {
+    expect(asksUserQuestion("Should I book it?")).toBe(true);
+    expect(asksUserQuestion("See https://x.example/a?b=1 for details.")).toBe(false);
+    expect(asksUserQuestion("Ran `ls ?`.")).toBe(false);
+    expect(asksUserQuestion("```\nwhat?\n```\nDone.")).toBe(false);
+    expect(asksUserQuestion("```\nunclosed?")).toBe(false);
+    expect(asksUserQuestion("Link https://x.example/?q - ok?")).toBe(true);
+  });
+});
+
+describe("isExplicitRoutineReply", () => {
+  it("accepts 🤖 and FYI: markers and short no-news acknowledgments", () => {
+    expect(isExplicitRoutineReply("  🤖 FYI: filed")).toBe(true);
+    expect(isExplicitRoutineReply("🤖 Filed")).toBe(true);
+    expect(isExplicitRoutineReply("FYI: filed")).toBe(true);
+    expect(isExplicitRoutineReply("Fyi: filed")).toBe(true);
+    for (const ack of [
+      "Nothing new.",
+      "nothing new",
+      "Sent to the main thread.",
+      "No changes",
+      "All clear!",
+      "No updates.",
+    ]) {
+      expect(isExplicitRoutineReply(ack)).toBe(true);
+    }
+    expect(isExplicitRoutineReply("Nothing new, but the disk is filling up.")).toBe(false);
+    expect(isExplicitRoutineReply("Filed the receipt.")).toBe(false);
+    expect(isExplicitRoutineReply("FYI the import failed")).toBe(false);
+  });
+});
+
 describe("reuseFoldRows", () => {
   it("keeps an unchanged fold row the same object and replaces a changed one", () => {
-    const first = foldAgentTurns([agent("g1"), reply("a1", "x")], NONE);
+    const first = foldAgentTurns([agent("g1"), reply("a1", "FYI: x")], NONE);
     const kept = reuseFoldRows(first, new Map());
-    const again = reuseFoldRows(foldAgentTurns([agent("g1"), reply("a1", "x")], NONE), kept.byId);
+    const again = reuseFoldRows(
+      foldAgentTurns([agent("g1"), reply("a1", "FYI: x")], NONE),
+      kept.byId,
+    );
     expect(again.rows[0]).toBe(kept.rows[0]);
     const changed = reuseFoldRows(
-      foldAgentTurns([agent("g1"), reply("a1", "new")], NONE),
+      foldAgentTurns([agent("g1"), reply("a1", "FYI: new")], NONE),
       kept.byId,
     );
     expect(changed.rows[0]).not.toBe(kept.rows[0]);

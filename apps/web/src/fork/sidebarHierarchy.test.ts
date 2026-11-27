@@ -11,13 +11,10 @@ import {
   isProjectScopeMultiSelectClick,
   isBackgroundBotThread,
   isHumanThread,
-  parseSidebarFilterLens,
   removeSidebarFilterPreset,
-  SIDEBAR_FILTER_LENSES,
   renameSidebarFilterPreset,
   sidebarBotRows,
   sidebarDrawerCount,
-  sidebarSettledCount,
   sidebarThreadKey,
   splitBotDrawerRows,
   threadNeedsMe,
@@ -89,7 +86,6 @@ function partition(lists: Partial<SidebarPartitionLists<Thread>>) {
 
 const options = {
   enabled: true,
-  lens: "all" as const,
   botExpanded: false,
   routeThreadKey: null,
 };
@@ -242,12 +238,9 @@ describe("placement overrides", () => {
     expect(ids(result.forkHierarchy.drawer?.threads ?? [])).toEqual(["mine"]);
   });
 
-  it("drops a forced-background report from the Needs me count", () => {
-    const view = applySidebarHierarchy(partition({ activeThreads: [digest] }), {
-      ...options,
-      placementOverrides: { [key(digest)]: "background" },
-    }).forkHierarchy;
-    expect(view.needsMeCount).toBe(0);
+  it("no longer counts a forced-background report as needing the user", () => {
+    expect(threadNeedsMe(digest)).toBe(true);
+    expect(threadNeedsMe(digest, { [key(digest)]: "background" })).toBe(false);
   });
 });
 
@@ -274,12 +267,12 @@ describe("applySidebarHierarchy", () => {
     const result = applySidebarHierarchy(base, { ...options, enabled: false });
     expect(ids(result.activeThreads)).toEqual(["human", "report", "bot", "bot-failed"]);
     expect(ids(result.workingThreads)).toEqual(["human-running", "bot-running"]);
-    expect(result.forkHierarchy.lens).toBeNull();
+    expect(result.forkHierarchy.enabled).toBe(false);
     expect(result.forkHierarchy.drawer).toBeNull();
     expect(result.visibleThreads).toBe(base.visibleThreads);
   });
 
-  it("folds bots' quiet lanes into a closed drawer under All, keeping reports and failures", () => {
+  it("folds bots' quiet lanes into a closed drawer, keeping reports and failures", () => {
     const result = applySidebarHierarchy(base, options);
     expect(ids(result.pinnedThreads)).toEqual(["pinned", "pinned-waiting"]);
     expect(ids(result.activeThreads)).toEqual(["human", "report", "bot-failed"]);
@@ -320,33 +313,6 @@ describe("applySidebarHierarchy", () => {
     expect(
       withBotDrawerMarker([{ kind: "marker", marker: "settled-header" }], result.forkHierarchy),
     ).toEqual([{ kind: "marker", marker: "settled-header" }]);
-  });
-
-  it("lists only what needs the user under Needs me, plus the open thread", () => {
-    const routeThreadKey = sidebarThreadKey(settled);
-    const result = applySidebarHierarchy(base, { ...options, lens: "needs-me", routeThreadKey });
-    expect(ids(result.pinnedThreads)).toEqual(["pinned-waiting"]);
-    expect(ids(result.activeThreads)).toEqual(["report", "bot-failed"]);
-    expect(ids(result.workingThreads)).toEqual([]);
-    const working = applySidebarHierarchy(
-      partition({ workingThreads: [botFailed, botRunning], activeThreads: [human] }),
-      { ...options, lens: "needs-me" },
-    );
-    expect(ids(working.activeThreads)).toEqual(["bot-failed"]);
-    expect(ids(working.workingThreads)).toEqual([]);
-    expect(ids(working.forkHierarchy.hiddenThreads)).toEqual(["bot-running", "human"]);
-    expect(ids(result.snoozedThreads)).toEqual([]);
-    expect(ids(result.settledThreads)).toEqual(["settled"]);
-    expect(result.forkHierarchy.drawer).toBeNull();
-    expect(result.forkHierarchy.needsMeCount).toBe(3);
-    expect(sidebarSettledCount(result.forkHierarchy, 1, 40)).toBe(1);
-    expect(sidebarSettledCount(applySidebarHierarchy(base, options).forkHierarchy, 1, 40)).toBe(40);
-  });
-
-  it("counts what needs the user across pinned, active and working whatever the filter", () => {
-    for (const lens of ["all", "needs-me"] as const) {
-      expect(applySidebarHierarchy(base, { ...options, lens }).forkHierarchy.needsMeCount).toBe(3);
-    }
   });
 
   it("keeps drawer rows out of boring mode's folders", () => {
@@ -503,19 +469,5 @@ describe("stored views", () => {
       ]),
     ).toEqual([{ id: "a", name: "Bots", projectKeys: ["env:1"] }]);
     expect(normalizeSidebarFilterPresets(undefined)).toEqual([]);
-  });
-});
-
-describe("sidebar filter lens", () => {
-  it("offers All and Needs me only", () => {
-    expect(SIDEBAR_FILTER_LENSES).toEqual(["all", "needs-me"]);
-  });
-
-  it("reads a stored Mine, or anything unknown, as All", () => {
-    expect(parseSidebarFilterLens("needs-me")).toBe("needs-me");
-    expect(parseSidebarFilterLens("all")).toBe("all");
-    expect(parseSidebarFilterLens("mine")).toBe("all");
-    expect(parseSidebarFilterLens(42)).toBe("all");
-    expect(parseSidebarFilterLens(null)).toBe("all");
   });
 });

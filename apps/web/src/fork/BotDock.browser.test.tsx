@@ -116,7 +116,6 @@ async function renderSidebar(stack: DisposableStack) {
   __setClientSettingsForTests(DEFAULT_CLIENT_SETTINGS);
   updateForkSettings({ botDockEnabled: true, sidebarHierarchyEnabled: true });
   stack.defer(() => updateForkSettings(DEFAULT_FORK_SETTINGS));
-  stack.defer(() => localStorage.removeItem("t3code:fork:sidebar-lens"));
   vi.mocked(useProjects).mockReturnValue([penny, chief, eagle, mortie, loose]);
   vi.mocked(useQuietThreadShells).mockReturnValue(threads);
   const handleNewThread = vi.fn();
@@ -168,9 +167,8 @@ describe("Bot Dock", () => {
     const avatar = tileElement("penny").querySelector<HTMLElement>(".rounded-full.size-12")!;
     expect(avatar.getBoundingClientRect().width).toBe(48);
 
-    // The dock sits above the filter bar.
-    const bar = page.getByTestId("sidebar-filter-bar").element();
-    expect(dock.compareDocumentPosition(bar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // With no saved views the filter bar takes no height under the dock.
+    expect(document.querySelector('[data-testid="sidebar-filter-bar"]')).toBeNull();
   });
 
   it("rolls up status and leaves docked main threads out of Pinned", async () => {
@@ -198,23 +196,6 @@ describe("Bot Dock", () => {
     expect(
       tileElement("chief").querySelector('[data-testid="bot-dock-ring-working"]'),
     ).not.toBeNull();
-
-    // Needs me hides what is not waiting on the user, and the rest re-centers.
-    await userEvent.click(page.getByRole("button", { name: /Needs me/ }));
-    await vi.waitFor(() =>
-      expect(document.querySelector(`[data-testid="${tileId("penny")}"]`)).toBeNull(),
-    );
-    const dock = document.querySelector<HTMLElement>('[data-testid="bot-dock"]')!;
-    expect([...dock.children].map((element) => (element as HTMLElement).dataset.testid)).toEqual([
-      tileId("mortie"),
-    ]);
-    const center = (rect: DOMRect) => rect.left + rect.width / 2;
-    expect(
-      Math.abs(
-        center(tileElement("mortie").getBoundingClientRect()) -
-          center(dock.getBoundingClientRect()),
-      ),
-    ).toBeLessThan(2);
   });
 
   it("scopes to a topic desk, follows delegated lanes, and toggles back", async () => {

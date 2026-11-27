@@ -32,12 +32,11 @@ keeps your sign-in, settings and threads.
      turns into one "Bot activity" strip; running, failed, waiting and 👉 turns stay open, as
      does any reply with a question (a `?` outside code and links) and the newest handoff from
      another bot unless its reply starts with 🤖 or `FYI:` or only says there is nothing new.
-     "Sidebar filter and Bot / Background" (on by default) adds All | Needs me under the
-     sidebar's pages and folds bots' background lanes you never wrote in (delegated, subagent,
-     workflow or worktree threads and `· scheduled jobs` threads; no 👉 title, nothing waiting
-     on you, no failed run) into a collapsible Bot / Background shelf above Snoozed and Settled.
-     A thread a bot opened on its own, such as a digest, stays in the list and counts under
-     Needs me until you reply or give it a ✅ title. Right-click a thread in the list: "Move to
+     "Bot / Background drawer" (on by default) folds bots' background lanes you never wrote in
+     (delegated, subagent, workflow or worktree threads and `· scheduled jobs` threads; no 👉
+     title, nothing waiting on you, no failed run) into a collapsible Bot / Background shelf
+     above Snoozed and Settled; its header shows `running / total` while any are running. A
+     thread a bot opened on its own, such as a digest, stays in the list. Right-click a thread in the list: "Move to
      Bot / Background" or "Move to main sidebar" overrides that rule for the one thread (kept on
      this Mac; a thread waiting on you or failed never hides). Shift-,
      ⌘- or Ctrl-click in the sidebar's project menu picks several projects; with projects
@@ -45,11 +44,11 @@ keeps your sign-in, settings and threads.
      (menu, view or dock) also lists threads delegated or spawned from its threads, across
      environments (`delegatedFrom`, `lineage.parentThreadId`).
      "Bot Dock (pinned projects grid)" (on by default) shows pinned projects as avatars, three
-     across, above that filter: provider badge, a blue arc while working, an amber ring when one
+     across, above the saved views: provider badge, a blue arc while working, an amber ring when one
      needs you, a blue dot when unread, a thread count on topic desks. A project's top pinned
      thread is its main thread: the tile opens it and the Pinned list leaves it out. A desk with
      no pinned thread filters the sidebar to itself and opens its latest thread; click again
-     for all projects. Under Needs me or a scope, tiles outside it are hidden. Hover shows +
+     for all projects. A scope hides tiles outside it. Hover shows +
      for a new thread; right-click to filter or unpin. Pin a
      project from the project menu to dock it.
      "Arc-style Spaces sidebar" (on by default) shows one Space at a time: its own projects
@@ -117,7 +116,7 @@ reinstalls the current release.
 | Board right panel, sidebar pages, "Open in" desk      | none (fork-only)           | the Board patch is dropped             |
 | Collapse routine bot updates in threads               | none (fork-only)           | upstream folds agent-to-agent turns    |
 | Scheduled task delivery modes                         | none (fork-only)           | upstream ships per-task notify modes   |
-| Sidebar All/Needs me, Bot / Background                | none (fork-only)           | upstream separates bot threads         |
+| Bot / Background drawer (no All/Needs me switch)      | none (fork-only)           | upstream separates bot threads         |
 | Scheduled jobs health on the Board (Jobs)             | none (fork-only)           | the Board patch is dropped             |
 | Bot Dock; project scope follows delegated threads     | none (fork-only)           | upstream ships a pinned-project dock   |
 | Arc-style Spaces sidebar with pinned thread grids     | none (fork-only)           | upstream ships sidebar spaces          |

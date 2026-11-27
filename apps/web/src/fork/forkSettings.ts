@@ -38,7 +38,7 @@ export interface ForkSettings {
   readonly sidebarPages: ReadonlyArray<SidebarPage>;
   /** Fold routine agent-to-agent and automation turns in a thread into one strip. */
   readonly collapseAgentTurns: boolean;
-  /** The sidebar's All / Needs me filter and its Bot / Background drawer. */
+  /** The sidebar's Bot / Background drawer and saved project views. */
   readonly sidebarHierarchyEnabled: boolean;
   readonly sidebarFilterPresets: ReadonlyArray<SidebarFilterPreset>;
   /** Threads the user moved between the main list and Bot / Background by hand. */

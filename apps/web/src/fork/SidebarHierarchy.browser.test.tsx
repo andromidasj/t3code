@@ -47,18 +47,23 @@ const project: Project = {
 function shell(
   id: string,
   title: string,
-  options: { readonly bot?: boolean; readonly lane?: boolean; readonly failed?: boolean } = {},
+  options: {
+    readonly bot?: boolean;
+    readonly lane?: boolean;
+    readonly failed?: boolean;
+    readonly running?: boolean;
+  } = {},
 ) {
   const base = makeThreadFixture({
     environmentId,
     id: ThreadId.make(id),
     projectId: project.id,
     title,
-    ...(options.failed
+    ...(options.failed || options.running
       ? {
           latestRun: {
             runId: RunId.make(`${id}-run`),
-            status: "failed" as const,
+            status: options.running ? ("running" as const) : ("failed" as const),
             requestedAt: null,
             startedAt: null,
             completedAt: null,
@@ -83,18 +88,15 @@ const threads = [
   shell("digest", "Chief · inbox digest · Nov 26", { bot: true }),
 ];
 
-describe("sidebar filter and Bot / Background drawer", () => {
-  it("separates bot lanes into a drawer and filters by All and Needs me", async () => {
+describe("Bot / Background drawer", () => {
+  it("separates bot lanes into a drawer and shows no All | Needs me switch", async () => {
     using stack = new DisposableStack();
     const previousSettings = getClientSettings();
     stack.defer(() => __setClientSettingsForTests(previousSettings));
     __setClientSettingsForTests(DEFAULT_CLIENT_SETTINGS);
     updateForkSettings({ sidebarHierarchyEnabled: true, sidebarFilterPresets: [] });
     stack.defer(() => updateForkSettings(DEFAULT_FORK_SETTINGS));
-    stack.defer(() => localStorage.removeItem("t3code:fork:sidebar-lens"));
     stack.defer(() => localStorage.removeItem("t3code:fork:sidebar-bot-expanded"));
-    // A Mac upgrading from a build that still had Mine.
-    localStorage.setItem("t3code:fork:sidebar-lens", '"mine"');
     vi.mocked(useProjects).mockReturnValue([project]);
     vi.mocked(useQuietThreadShells).mockReturnValue(threads);
     vi.mocked(useHandleNewThread).mockReturnValue({
@@ -114,9 +116,9 @@ describe("sidebar filter and Bot / Background drawer", () => {
     );
 
     await expect.element(screen.getByText("My own thread")).toBeInTheDocument();
-    await expect
-      .element(screen.getByRole("button", { name: "All", exact: true }))
-      .toHaveAttribute("aria-pressed", "true");
+    // The All | Needs me switch is gone, and with no saved views nothing takes its height.
+    expect(screen.getByRole("button", { name: "All", exact: true }).query()).toBeNull();
+    expect(document.querySelector('[data-testid="sidebar-filter-bar"]')).toBeNull();
     await expect.element(screen.getByText("👉 Pick a flight")).toBeInTheDocument();
     // A report a bot opened on its own stays in the list.
     await expect.element(screen.getByText("Chief · inbox digest · Nov 26")).toBeInTheDocument();
@@ -129,14 +131,11 @@ describe("sidebar filter and Bot / Background drawer", () => {
     await expect.element(drawerToggle).toHaveAttribute("aria-expanded", "false");
     expect(document.body.textContent).not.toContain("Nightly scan");
     expect(document.body.textContent).not.toContain("Desk · scheduled jobs");
-    await expect
-      .element(screen.getByRole("button", { name: /Needs me, 3 waiting/ }))
-      .toBeInTheDocument();
 
     await userEvent.click(drawerToggle);
     await expect.element(screen.getByText("Nightly scan")).toBeInTheDocument();
     await expect.element(screen.getByText("Desk · scheduled jobs")).toBeInTheDocument();
-    // A lane whose run failed leaves the drawer (it waits under Needs me).
+    // A lane whose run failed leaves the drawer (it is not a quiet lane).
     expect(document.body.textContent).not.toContain("Broken watcher");
     await expect.element(drawerToggle).toHaveAttribute("aria-expanded", "true");
     // The drawer's rows are full thread rows below its header.
@@ -148,20 +147,47 @@ describe("sidebar filter and Bot / Background drawer", () => {
 
     await userEvent.click(drawerToggle);
     await vi.waitFor(() => expect(document.body.textContent).not.toContain("Nightly scan"));
+  });
 
-    expect(screen.getByRole("button", { name: "Mine", exact: true }).query()).toBeNull();
+  it("shows running / total on the Bot / Background header, or just the total when idle", async () => {
+    using stack = new DisposableStack();
+    const previousSettings = getClientSettings();
+    stack.defer(() => __setClientSettingsForTests(previousSettings));
+    __setClientSettingsForTests(DEFAULT_CLIENT_SETTINGS);
+    updateForkSettings({ sidebarHierarchyEnabled: true, sidebarFilterPresets: [] });
+    stack.defer(() => updateForkSettings(DEFAULT_FORK_SETTINGS));
+    stack.defer(() => localStorage.removeItem("t3code:fork:sidebar-bot-expanded"));
+    const busy = [
+      shell("busy-mine", "Busy own thread"),
+      shell("busy-lane-a", "Lane A", { bot: true, lane: true, running: true }),
+      shell("busy-lane-b", "Lane B", { bot: true, lane: true, running: true }),
+      shell("busy-lane-c", "Lane C", { bot: true, lane: true }),
+    ];
+    vi.mocked(useProjects).mockReturnValue([project]);
+    vi.mocked(useQuietThreadShells).mockReturnValue(busy);
+    vi.mocked(useHandleNewThread).mockReturnValue({
+      activeDraftThread: null,
+      activeThread: null,
+      defaultProjectRef: null,
+      defaultProjectFallbackReady: true,
+      handleNewThread: vi.fn(),
+      routeDraftId: null,
+      routeThreadRef: null,
+    });
 
-    await userEvent.click(screen.getByRole("button", { name: /Needs me/ }));
-    await vi.waitFor(() => expect(document.body.textContent).not.toContain("My own thread"));
-    await expect.element(screen.getByText("👉 Pick a flight")).toBeInTheDocument();
-    await expect.element(screen.getByText("Broken watcher")).toBeInTheDocument();
-    await expect.element(screen.getByText("Chief · inbox digest · Nov 26")).toBeInTheDocument();
-    expect(document.body.textContent).not.toContain("Nightly scan");
-    expect(localStorage.getItem("t3code:fork:sidebar-lens")).toBe('"needs-me"');
-
-    await userEvent.click(screen.getByRole("button", { name: "All", exact: true }));
-    await expect.element(screen.getByText("My own thread")).toBeInTheDocument();
-    await expect.element(screen.getByTestId("sidebar-bot-shelf-toggle")).toBeInTheDocument();
+    await using screen = await render(
+      <SidebarProvider>
+        <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+      </SidebarProvider>,
+    );
+    const toggle = screen.getByTestId("sidebar-bot-shelf-toggle");
+    await vi.waitFor(() =>
+      expect(toggle.element().textContent?.replace(/\s+/g, " ")).toMatch(
+        /^Bot \/ Background ?2 ?\/ ?3$/,
+      ),
+    );
+    await expect.element(screen.getByRole("img", { name: "2 running of 3" })).toBeInTheDocument();
+    expect(toggle.element().querySelector("svg")).not.toBeNull();
   });
 
   it("moves a single thread between the main sidebar and Bot / Background from its menu", async () => {
@@ -171,7 +197,6 @@ describe("sidebar filter and Bot / Background drawer", () => {
     __setClientSettingsForTests(DEFAULT_CLIENT_SETTINGS);
     updateForkSettings({ sidebarHierarchyEnabled: true, sidebarFilterPresets: [] });
     stack.defer(() => updateForkSettings(DEFAULT_FORK_SETTINGS));
-    stack.defer(() => localStorage.removeItem("t3code:fork:sidebar-lens"));
     stack.defer(() => localStorage.removeItem("t3code:fork:sidebar-bot-expanded"));
     vi.mocked(useProjects).mockReturnValue([project]);
     vi.mocked(useQuietThreadShells).mockReturnValue(threads);
@@ -268,7 +293,6 @@ describe("sidebar filter and Bot / Background drawer", () => {
       sidebarFilterPresets: [{ id: "bots", name: "Bots", projectKeys: [projectKey] }],
     });
     stack.defer(() => updateForkSettings(DEFAULT_FORK_SETTINGS));
-    stack.defer(() => localStorage.removeItem("t3code:fork:sidebar-lens"));
     stack.defer(() => localStorage.removeItem("t3code:fork:sidebar-bot-expanded"));
     vi.mocked(useProjects).mockReturnValue([project]);
     vi.mocked(useQuietThreadShells).mockReturnValue(threads);
@@ -291,12 +315,8 @@ describe("sidebar filter and Bot / Background drawer", () => {
     );
     await expect.element(screen.getByText("My own thread")).toBeInTheDocument();
 
-    // Every filter option shows its whole label, the count included.
-    const bar = document.querySelector<HTMLElement>('[data-testid="sidebar-filter-bar"]')!;
-    const toggles = [...bar.querySelectorAll<HTMLElement>('[data-slot="toggle"]')];
-    expect(toggles).toHaveLength(2);
-    for (const toggle of toggles)
-      expect(toggle.scrollWidth).toBeLessThanOrEqual(toggle.clientWidth);
+    // Saved views are all the bar holds; the All | Needs me switch is gone.
+    expect(document.querySelector('[data-slot="toggle"]')).toBeNull();
 
     // The saved view's label is centered; its delete badge floats over the corner.
     const chip = screen.getByRole("button", { name: "Bots", exact: true }).element() as HTMLElement;

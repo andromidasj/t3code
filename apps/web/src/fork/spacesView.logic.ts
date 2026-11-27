@@ -11,7 +11,6 @@ import {
   isThreadRunning,
   sidebarThreadKey,
   threadNeedsMe,
-  type SidebarFilterLens,
 } from "./sidebarHierarchy";
 import {
   indexLineageThreads,
@@ -136,8 +135,6 @@ export function buildSpacesView<T extends SpacesThread, G extends SpacesGroup>(i
   readonly routeChanged: boolean;
   /** The open draft's project, for a route with no thread yet. */
   readonly routeDraftProject: Pick<ScopedProjectRef, "environmentId" | "projectId"> | null;
-  /** Null when the sidebar filter is off. */
-  readonly lens: SidebarFilterLens | null;
   readonly now: string;
   readonly localLastVisitedAt: Readonly<Record<string, string>>;
   readonly placementOverrides?: ThreadPlacementOverrides;
@@ -250,7 +247,7 @@ export function buildSpacesView<T extends SpacesThread, G extends SpacesGroup>(i
     routeSpaceId,
     routeOwnerKnown: routeOwners.length > 0,
     projects,
-    tiles: input.lens === "needs-me" ? tiles.filter((tile) => tile.status === "needs") : tiles,
+    tiles,
     gridThreadKeys: new Set(gridThreads.map(({ key }) => key)),
     stats,
     spaceIdsByThreadKey,

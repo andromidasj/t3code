@@ -111,9 +111,9 @@ export function ForkSettingsSection() {
       />
       <SettingsRow
         devicePreference
-        title={gt("Sidebar filter and Bot / Background")}
+        title={gt("Bot / Background drawer")}
         description={gt(
-          "Show All and Needs me above the thread list, and fold threads bots started on their own (that you never wrote in) into a collapsible Bot / Background section.",
+          "Fold threads bots started on their own (that you never wrote in) into a collapsible Bot / Background section.",
         )}
         control={
           <Switch
@@ -121,7 +121,7 @@ export function ForkSettingsSection() {
             onCheckedChange={(checked) =>
               updateForkSettings({ sidebarHierarchyEnabled: Boolean(checked) })
             }
-            aria-label={gt("Sidebar filter and Bot / Background")}
+            aria-label={gt("Bot / Background drawer")}
           />
         }
       />

@@ -9,23 +9,6 @@ import type {
   ThreadPlacementOverrides,
 } from "./forkSettings";
 
-/**
- * The sidebar's quick filter. `all` lists the user's threads and folds bots' background lanes into
- * a Bot / Background drawer; `needs-me` lists only threads waiting on the user.
- */
-export type SidebarFilterLens = "all" | "needs-me";
-
-export const SIDEBAR_FILTER_LENSES: ReadonlyArray<SidebarFilterLens> = ["all", "needs-me"];
-
-export function isSidebarFilterLens(value: unknown): value is SidebarFilterLens {
-  return SIDEBAR_FILTER_LENSES.includes(value as SidebarFilterLens);
-}
-
-/** A stored lens; `mine`, dropped since, and anything unknown read as All. */
-export function parseSidebarFilterLens(value: unknown): SidebarFilterLens {
-  return isSidebarFilterLens(value) ? value : "all";
-}
-
 export type SidebarHierarchyThread = Pick<
   EnvironmentThreadShell,
   | "environmentId"
@@ -142,7 +125,7 @@ export function isHumanThread(
 }
 
 /**
- * What the Needs me filter lists: waiting on the user, opened for them (👉), its last run failed,
+ * What needs the user: waiting on the user, opened for them (👉), its last run failed,
  * or a report a bot opened outside its lanes that the user has not answered or marked ✅ done.
  * A thread moved to Bot / Background is no longer such a report.
  */
@@ -191,25 +174,24 @@ export interface SidebarBotDrawer<T> {
 }
 
 export interface SidebarHierarchyView<T> {
-  /** Null when the hierarchy is off and the sidebar is upstream's. */
-  readonly lens: SidebarFilterLens | null;
-  readonly needsMeCount: number;
-  /** Shown under All while bots have background threads. */
+  /** False when the hierarchy is off and the sidebar is upstream's. */
+  readonly enabled: boolean;
+  /** Shown while bots have background threads. */
   readonly drawer: SidebarBotDrawer<T> | null;
   /** Bot threads listed in `activeThreads`: the drawer's rows, or the open thread. */
   readonly botRowKeys: ReadonlySet<string>;
-  /** Threads the filter or the closed drawer leaves out, which search still finds. */
+  /** Threads the closed drawer leaves out, which search still finds. */
   readonly hiddenThreads: readonly T[];
 }
 
 const NO_KEYS: ReadonlySet<string> = new Set();
 
 function disabledSidebarHierarchy<T>(): SidebarHierarchyView<T> {
-  return { lens: null, needsMeCount: 0, drawer: null, botRowKeys: NO_KEYS, hiddenThreads: [] };
+  return { enabled: false, drawer: null, botRowKeys: NO_KEYS, hiddenThreads: [] };
 }
 
 /**
- * Applies the filter to the sidebar's sections. Bot threads, active or working, move below the
+ * Folds bots' background lanes into the drawer. Bot threads, active or working, move below the
  * user's own active threads as the drawer's rows; the open thread always stays listed.
  */
 export function applySidebarHierarchy<
@@ -219,7 +201,6 @@ export function applySidebarHierarchy<
   partition: P & SidebarPartitionLists<T>,
   options: {
     readonly enabled: boolean;
-    readonly lens: SidebarFilterLens;
     readonly botExpanded: boolean;
     readonly routeThreadKey: string | null;
     readonly placementOverrides?: ThreadPlacementOverrides;
@@ -228,44 +209,16 @@ export function applySidebarHierarchy<
   if (!options.enabled) {
     return { ...partition, forkHierarchy: disabledSidebarHierarchy<T>() };
   }
-  const { lens, routeThreadKey, placementOverrides } = options;
-  const needsMe = (thread: T) => threadNeedsMe(thread, placementOverrides);
+  const { routeThreadKey, placementOverrides } = options;
   const isHuman = (thread: T) => isHumanThread(thread, placementOverrides);
   const isRoute = (thread: T) =>
     routeThreadKey !== null && sidebarThreadKey(thread) === routeThreadKey;
-  const needsMeCount = [
-    ...partition.pinnedThreads,
-    ...partition.activeThreads,
-    ...partition.workingThreads,
-  ].filter(needsMe).length;
   const hidden: T[] = [];
   const keep = (threads: readonly T[], test: (thread: T) => boolean): T[] => {
     const kept: T[] = [];
     for (const thread of threads) (test(thread) || isRoute(thread) ? kept : hidden).push(thread);
     return kept;
   };
-
-  if (lens === "needs-me") {
-    // One flat list: a match on the Working shelf would sit behind its closed header.
-    const workingThreads = keep(partition.workingThreads, () => false);
-    const workingMatches = hidden.filter(needsMe);
-    hidden.splice(0, hidden.length, ...hidden.filter((thread) => !needsMe(thread)));
-    return {
-      ...partition,
-      pinnedThreads: keep(partition.pinnedThreads, needsMe),
-      activeThreads: [...workingMatches, ...keep(partition.activeThreads, needsMe)],
-      workingThreads,
-      snoozedThreads: keep(partition.snoozedThreads, () => false),
-      settledThreads: keep(partition.settledThreads, () => false),
-      forkHierarchy: {
-        lens,
-        needsMeCount,
-        drawer: null,
-        botRowKeys: NO_KEYS,
-        hiddenThreads: hidden,
-      },
-    };
-  }
 
   const humanActive = partition.activeThreads.filter(isHuman);
   const humanWorking = partition.workingThreads.filter(isHuman);
@@ -280,8 +233,7 @@ export function applySidebarHierarchy<
     activeThreads: [...humanActive, ...listedBots],
     workingThreads: humanWorking,
     forkHierarchy: {
-      lens,
-      needsMeCount,
+      enabled: true,
       drawer: showDrawer
         ? {
             threads: bots,
@@ -312,15 +264,6 @@ export function sidebarBotRows<T extends SidebarHierarchyThread>(
 ): readonly T[] {
   if (view.botRowKeys.size === 0) return [];
   return threads.filter((thread) => view.botRowKeys.has(sidebarThreadKey(thread)));
-}
-
-/** In the needs-me filter the Settled shelf counts only what it lists. */
-export function sidebarSettledCount(
-  view: SidebarHierarchyView<unknown>,
-  listed: number,
-  total: number,
-): number {
-  return view.lens === "needs-me" ? listed : total;
 }
 
 /** Whether the list has anything to show beyond what upstream counts: a closed drawer. */

@@ -21,7 +21,6 @@ import {
   isThreadRunning,
   sidebarThreadKey,
   threadNeedsMe,
-  type SidebarFilterLens,
   type SidebarHierarchyThread,
   type SidebarHierarchyView,
   type SidebarPartitionLists,
@@ -101,8 +100,6 @@ export function buildBotDock<T extends BotDockThread, G extends BotDockGroup>(in
   readonly threads: ReadonlyArray<T>;
   readonly routeThreadKey: string | null;
   readonly projectScopeKeys: ReadonlyArray<string>;
-  /** Null when the sidebar filter is off. */
-  readonly lens: SidebarFilterLens | null;
   readonly now: string;
   readonly localLastVisitedAt: Readonly<Record<string, string>>;
   readonly placementOverrides?: ThreadPlacementOverrides;
@@ -187,8 +184,7 @@ export function buildBotDock<T extends BotDockThread, G extends BotDockGroup>(in
           sidebarThreadKey(mainThread) === input.routeThreadKey) ||
         scopedOnly === group.projectKey,
       hidden:
-        (input.lens === "needs-me" && status !== "needs") ||
-        (input.projectScopeKeys.length > 0 && !input.projectScopeKeys.includes(group.projectKey)),
+        input.projectScopeKeys.length > 0 && !input.projectScopeKeys.includes(group.projectKey),
       threadKeys: new Set(rolled.map(sidebarThreadKey)),
     };
   });

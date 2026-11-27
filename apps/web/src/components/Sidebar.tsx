@@ -271,7 +271,6 @@ import {
   isProjectScopeMultiSelectClick,
   sidebarBotRows,
   sidebarDrawerCount,
-  sidebarSettledCount,
   withBotDrawerMarker,
   withoutBotRows,
 } from "~/fork/sidebarHierarchy";
@@ -552,11 +551,8 @@ function useSidebarThreads(input: {
   });
   const listedSettledThreads = settledThreads.filter(olderSettledShelf.isListed);
   useOlderSettledShelfGrowth(olderSettledShelf, listedSettledThreads);
-  const settledCount = sidebarSettledCount(
-    partition.forkHierarchy,
-    settledThreads.length,
-    settledThreads.length + olderSettledShelf.unloadedCount(partition.visibleThreads),
-  );
+  const settledCount =
+    settledThreads.length + olderSettledShelf.unloadedCount(partition.visibleThreads);
   const visibleSettledThreads = (() => {
     const visible = listedSettledThreads.slice(0, settledVisibleCount);
     if (
@@ -2852,7 +2848,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             {
               thread,
               eligible:
-                forkHierarchy.lens !== null &&
+                forkHierarchy.enabled &&
                 !isSettled &&
                 !isSnoozed &&
                 !isPinned &&
@@ -3488,7 +3484,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               onUnpin={toggleProjectGroupPin}
             />
             <SidebarFilterBar
-              needsMeCount={forkHierarchy.needsMeCount}
               hidden={isSearchingThreads}
               projectScopeKeys={projectScopeKeys}
               onProjectScopeChange={setProjectScopeKeys}

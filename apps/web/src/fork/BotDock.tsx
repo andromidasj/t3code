@@ -27,7 +27,6 @@ import {
 } from "./botDock.logic";
 import { useForkSettings } from "./forkSettings";
 import { isThreadRunning, threadNeedsMe } from "./sidebarHierarchy";
-import { useSidebarLens } from "./useSidebarHierarchy";
 
 type DockThread = EnvironmentThreadShell;
 type DockGroup = SidebarProjectSnapshot;
@@ -40,9 +39,7 @@ export function useBotDock(input: {
   readonly routeThreadKey: string | null;
   readonly projectScopeKeys: ReadonlyArray<string>;
 }): BotDockModel<DockThread, DockGroup> {
-  const { botDockEnabled, sidebarHierarchyEnabled, spacesEnabled, threadPlacementOverrides } =
-    useForkSettings();
-  const [lens] = useSidebarLens();
+  const { botDockEnabled, spacesEnabled, threadPlacementOverrides } = useForkSettings();
   // `YYYY-MM-DDTHH:mm` in UTC; the dock only needs snooze wakes to the minute.
   const nowMinute = useNowMinute();
   const localLastVisitedAt = useUiStateStore((store) => store.threadLastVisitedAtById);
@@ -50,7 +47,6 @@ export function useBotDock(input: {
   if (!botDockEnabled || spacesEnabled) return emptyBotDock();
   return buildBotDock({
     ...input,
-    lens: sidebarHierarchyEnabled ? lens : null,
     now: `${nowMinute}:00.000Z`,
     localLastVisitedAt,
     placementOverrides: threadPlacementOverrides,

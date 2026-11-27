@@ -150,7 +150,6 @@ async function setup(
     sidebarFilterPresets: [{ id: "view", name: "Saved view", projectKeys: [projectKey(chief)] }],
   });
   stack.defer(() => updateForkSettings({ ...DEFAULT_FORK_SETTINGS, spacesEnabled: false }));
-  stack.defer(() => localStorage.removeItem("t3code:fork:sidebar-lens"));
   vi.mocked(useProjects).mockReturnValue([chief, penny, eagle, repo]);
   vi.mocked(useQuietThreadShells).mockReturnValue(threads);
   const handleNewThread = vi.fn();
@@ -357,10 +356,9 @@ describe("Spaces sidebar", () => {
     const tile = page.getByTestId(`space-grid-tile-${threadKey(chiefBrief)}`);
     await vi.waitFor(() => expect(tileLabel(chiefBrief)).toBe("Chief"));
 
-    // The grid sits right above the filter bar.
-    const grid = page.getByTestId("space-grid").element();
-    const bar = page.getByTestId("sidebar-filter-bar").element();
-    expect(grid.compareDocumentPosition(bar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Spaces replace saved views, so no filter bar takes height under the grid.
+    expect(document.querySelector('[data-testid="sidebar-filter-bar"]')).toBeNull();
+    expect(document.body.textContent).not.toMatch(/Needs me/);
     const disc = tile.element().querySelector<HTMLElement>(".size-12.rounded-full")!;
     expect(disc.getBoundingClientRect().width).toBe(48);
 
@@ -390,7 +388,7 @@ describe("Spaces sidebar", () => {
     await vi.waitFor(() => expect(row(chiefBrief)).not.toBeNull());
   });
 
-  it("hides grid tiles that do not need the user under Needs me", async () => {
+  it("marks grid tiles that need the user", async () => {
     using stack = new DisposableStack();
     await setup(stack, {
       spaces: [HOME, EYE, { ...WORK, gridThreadKeys: [threadKey(repoAsk), threadKey(eagleLane)] }],
@@ -406,13 +404,11 @@ describe("Spaces sidebar", () => {
         .querySelector(`[data-testid="space-grid-tile-${threadKey(repoAsk)}"]`)!
         .getAttribute("data-status"),
     ).toBe("needs");
-
-    await userEvent.click(page.getByRole("button", { name: /Needs me/ }));
-    await vi.waitFor(() => expect(tiles()).toEqual([threadKey(repoAsk)]));
-    const grid = page.getByTestId("space-grid").element();
-    const only = grid.firstElementChild!.getBoundingClientRect();
-    const box = grid.getBoundingClientRect();
-    expect(Math.abs(only.left + only.width / 2 - (box.left + box.width / 2))).toBeLessThan(2);
+    expect(
+      document
+        .querySelector(`[data-testid="space-grid-tile-${threadKey(eagleLane)}"]`)!
+        .getAttribute("data-status"),
+    ).not.toBe("needs");
   });
 
   it("starts a new thread in the Space's only project", async () => {

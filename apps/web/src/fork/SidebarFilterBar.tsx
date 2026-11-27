@@ -5,7 +5,6 @@ import { useState, type FormEvent } from "react";
 import { CollapsibleSectionHeader } from "~/components/ui/collapsible-section-header";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
-import { Toggle, ToggleGroup } from "~/components/ui/toggle-group";
 import { SortableSidebarMarker } from "~/components/sidebar/SidebarListMarkers";
 import { cn, isMacPlatform } from "~/lib/utils";
 
@@ -13,88 +12,42 @@ import { updateForkSettings, useForkSettings, type SidebarFilterPreset } from ".
 import {
   addSidebarFilterPreset,
   findSidebarFilterPreset,
-  isSidebarFilterLens,
   removeSidebarFilterPreset,
   sameProjectKeys,
   toggledPresetScope,
   type SidebarBotDrawer,
 } from "./sidebarHierarchy";
-import { useSidebarLens } from "./useSidebarHierarchy";
 
 // One person saves views by hand on one Mac, so the time is unique enough.
 const newPresetId = () => `view-${Date.now().toString(36)}`;
 
 /**
- * All | Needs me under the sidebar's pages, and this Mac's saved project views. Hidden
- * while searching and when the hierarchy is off.
+ * This Mac's saved project views under the sidebar's pages. Renders nothing (no height) while
+ * searching, when the hierarchy is off, with Spaces on, or with nothing to show.
  */
 export function SidebarFilterBar(props: {
-  readonly needsMeCount: number;
   readonly hidden: boolean;
   readonly projectScopeKeys: ReadonlyArray<string>;
   readonly onProjectScopeChange: (keys: readonly string[]) => void;
 }) {
-  const gt = useGT();
   const { sidebarHierarchyEnabled, sidebarFilterPresets, spacesEnabled } = useForkSettings();
-  const [lens, setLens] = useSidebarLens();
-  if (!sidebarHierarchyEnabled || props.hidden) return null;
+  if (!sidebarHierarchyEnabled || props.hidden || spacesEnabled) return null;
   const { projectScopeKeys } = props;
   const canSave =
     projectScopeKeys.length > 0 &&
     findSidebarFilterPreset(sidebarFilterPresets, projectScopeKeys) === null;
+  if (sidebarFilterPresets.length === 0 && !canSave) return null;
   return (
-    <div className="mt-1.5 flex flex-col gap-1 px-2" data-testid="sidebar-filter-bar">
-      <div className="flex items-center gap-1">
-        <ToggleGroup
-          aria-label={gt("Filter threads")}
-          className="flex w-full"
-          value={[lens]}
-          onValueChange={(next) => {
-            const value = next[0];
-            if (isSidebarFilterLens(value)) setLens(value);
-          }}
-        >
-          <Toggle value="all" className={LENS_CLASS}>
-            <T context="sidebar thread filter">All</T>
-          </Toggle>
-          <Toggle
-            value="needs-me"
-            className={LENS_CLASS}
-            aria-label={
-              props.needsMeCount > 0
-                ? gt("Needs me, {count} waiting", { count: props.needsMeCount })
-                : undefined
-            }
-          >
-            <span className="flex items-center gap-1">
-              <T context="sidebar thread filter">Needs me</T>
-              {props.needsMeCount > 0 ? (
-                <span
-                  aria-hidden
-                  className="flex h-4 min-w-4 items-center justify-center rounded-full bg-warning/16 px-1 font-semibold text-2xs tabular-nums leading-none text-warning-foreground ring-1 ring-warning/40"
-                >
-                  {props.needsMeCount > 99 ? "99+" : props.needsMeCount}
-                </span>
-              ) : null}
-            </span>
-          </Toggle>
-        </ToggleGroup>
-      </div>
-      {/* Spaces replace saved views. */}
-      {!spacesEnabled && (sidebarFilterPresets.length > 0 || canSave) ? (
-        <SidebarProjectViews
-          presets={sidebarFilterPresets}
-          projectScopeKeys={projectScopeKeys}
-          canSave={canSave}
-          onProjectScopeChange={props.onProjectScopeChange}
-        />
-      ) : null}
+    <div className="mt-1.5 px-2" data-testid="sidebar-filter-bar">
+      <SidebarProjectViews
+        presets={sidebarFilterPresets}
+        projectScopeKeys={projectScopeKeys}
+        canSave={canSave}
+        onProjectScopeChange={props.onProjectScopeChange}
+      />
     </div>
   );
 }
-
-// The two options split the bar evenly; "Needs me 12" still fits a narrow sidebar.
-const LENS_CLASS = "flex-1 shrink whitespace-nowrap";
 
 const CHIP_CLASS =
   "inline-flex h-6 max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-full border px-2.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
@@ -227,13 +180,29 @@ export function SidebarBotDrawerHeader(props: {
         tone="muted"
         data-testid="sidebar-bot-shelf-toggle"
         accessory={
-          <span className="flex items-center gap-1.5 font-normal">
+          <span
+            className="flex items-center gap-1.5 font-normal tabular-nums"
+            role={drawer.runningCount > 0 ? "img" : undefined}
+            aria-label={
+              drawer.runningCount > 0
+                ? gt("{running} running of {total}", {
+                    running: drawer.runningCount,
+                    total: drawer.threads.length,
+                  })
+                : undefined
+            }
+          >
             {drawer.runningCount > 0 ? (
-              <span role="img" aria-label={gt("{count} running", { count: drawer.runningCount })}>
+              <>
                 <Spinner size="xs" tone="muted" />
-              </span>
-            ) : null}
-            <span className="tabular-nums">{drawer.threads.length}</span>
+                <span>
+                  <span className="text-sidebar-foreground">{drawer.runningCount}</span>
+                  <span className="text-sidebar-muted-foreground"> / {drawer.threads.length}</span>
+                </span>
+              </>
+            ) : (
+              <span>{drawer.threads.length}</span>
+            )}
           </span>
         }
       >

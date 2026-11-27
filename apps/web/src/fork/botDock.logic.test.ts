@@ -113,7 +113,6 @@ function dock(
   context: {
     readonly routeThreadKey?: string | null;
     readonly projectScopeKeys?: string[];
-    readonly lens?: "all" | "needs-me" | null;
   } = {},
 ) {
   return buildBotDock({
@@ -121,7 +120,6 @@ function dock(
     threads,
     routeThreadKey: context.routeThreadKey ?? null,
     projectScopeKeys: context.projectScopeKeys ?? [],
-    lens: context.lens ?? "all",
     now: NOW,
     localLastVisitedAt: {},
   });
@@ -220,12 +218,6 @@ describe("bot dock tiles", () => {
     const both = dock(groups, [main], { projectScopeKeys: [`${bots}:chief`, `${bots}:penny`] });
     expect(tileOf(both, "chief").selected).toBe(false);
     expect(tileOf(both, "penny").hidden).toBe(false);
-
-    const waiting = thread("ask", "chief", { approval: true });
-    const needs = dock(groups, [main, waiting], { lens: "needs-me" });
-    expect(tileOf(needs, "chief").hidden).toBe(false);
-    expect(tileOf(needs, "penny").hidden).toBe(true);
-    expect(tileOf(dock(groups, [main], { lens: null }), "penny").hidden).toBe(false);
   });
 
   it("badges the featured thread's provider, else the project's default", () => {
@@ -304,8 +296,7 @@ describe("threads shown above the list", () => {
       snoozedThreads: [],
       settledThreads: [settled],
       forkHierarchy: {
-        lens: "all" as const,
-        needsMeCount: 0,
+        enabled: true,
         drawer: {
           threads: [lane, otherBot],
           listed: [lane],
@@ -343,8 +334,7 @@ describe("threads shown above the list", () => {
       snoozedThreads: [],
       settledThreads: [],
       forkHierarchy: {
-        lens: "all" as const,
-        needsMeCount: 0,
+        enabled: true,
         drawer: { threads: [lane], listed: [], expanded: false, runningCount: 0 },
         botRowKeys: new Set<string>(),
         hiddenThreads: [lane] as Thread[],

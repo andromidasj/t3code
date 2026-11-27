@@ -118,7 +118,6 @@ function view(
     readonly routeThreadKey?: string | null;
     readonly routeChanged?: boolean;
     readonly routeDraftProject?: { environmentId: EnvironmentId; projectId: ProjectId } | null;
-    readonly lens?: "all" | "needs-me" | null;
   } = {},
 ) {
   return buildSpacesView({
@@ -128,7 +127,6 @@ function view(
     routeThreadKey: input.routeThreadKey ?? null,
     routeChanged: input.routeChanged ?? false,
     routeDraftProject: input.routeDraftProject ?? null,
-    lens: input.lens ?? "all",
     now: NOW,
     localLastVisitedAt: {},
   });
@@ -253,10 +251,7 @@ describe("the pinned grid", () => {
       ["busy", "working", false, true],
       ["quiet", "idle", true, false],
     ]);
-    const needs = view([main, lane, busy, quiet], { state: gridState, lens: "needs-me" });
-    expect(needs.tiles.map((tile) => tile.thread.id)).toEqual(["eagle main"]);
-    // Filtered tiles still stay out of the list below.
-    expect(needs.gridThreadKeys.size).toBe(3);
+    expect(all.gridThreadKeys.size).toBe(3);
   });
 });
 

@@ -47,7 +47,6 @@ import {
   type ThreadPlacementMenuInput,
   type ThreadPlacementMenuId,
 } from "./threadPlacementMenu";
-import { useSidebarLens } from "./useSidebarHierarchy";
 
 export type SpacesThread = EnvironmentThreadShell;
 export type SpacesGroup = SidebarProjectSnapshot;
@@ -138,7 +137,6 @@ export function useSidebarSpaces(input: {
   const gt = useGT();
   const settings = useForkSettings();
   const threads = useQuietThreadShells();
-  const [lens] = useSidebarLens();
   // `YYYY-MM-DDTHH:mm` in UTC; badges only need snooze wakes to the minute.
   const nowMinute = useNowMinute();
   const localLastVisitedAt = useUiStateStore((store) => store.threadLastVisitedAtById);
@@ -167,7 +165,6 @@ export function useSidebarSpaces(input: {
         routeChanged:
           routeThreadKey !== null && followedRouteKeys.get(routeReveal) !== routeThreadKey,
         routeDraftProject: input.routeDraftProject,
-        lens: settings.sidebarHierarchyEnabled ? lens : null,
         now: `${nowMinute}:00.000Z`,
         localLastVisitedAt,
         placementOverrides: settings.threadPlacementOverrides,

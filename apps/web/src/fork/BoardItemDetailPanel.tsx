@@ -26,6 +26,8 @@ export function BoardItemDetailPanel(props: {
   onOpenDesk: (() => void) | null;
   /** For links in the item's Markdown; null when no environment is connected. */
   markdownEnvironmentId: EnvironmentId | null;
+  /** Real thread on the desk's environment so images open in T3's native in-app preview. */
+  mediaThreadRef: ScopedThreadRef | null;
   /** The Board panel's entry that pull request links open in. */
   panelRef: ScopedThreadRef | null;
   onSelectItem: (key: string) => void;
@@ -66,6 +68,7 @@ export function BoardItemDetailPanel(props: {
             row={row}
             data={props.data}
             markdownEnvironmentId={props.markdownEnvironmentId}
+            mediaThreadRef={props.mediaThreadRef}
             panelRef={props.panelRef}
             onSelectItem={props.onSelectItem}
           />
@@ -79,11 +82,13 @@ function BoardItemDetails(props: {
   row: BoardItemRow;
   data: BoardData | null;
   markdownEnvironmentId: EnvironmentId | null;
+  mediaThreadRef: ScopedThreadRef | null;
   panelRef: ScopedThreadRef | null;
   onSelectItem: (key: string) => void;
 }) {
   const { item, desk } = props.row;
   const environmentId = props.markdownEnvironmentId ?? undefined;
+  const mediaThreadRef = props.mediaThreadRef ?? undefined;
   const pullRequestPanelRef = props.panelRef ?? undefined;
   return (
     <div className="h-full overflow-y-auto">
@@ -103,6 +108,7 @@ function BoardItemDetails(props: {
                 text={rewriteBoardThreadLinks(item.banner)}
                 cwd={undefined}
                 environmentId={environmentId}
+                mediaThreadRef={mediaThreadRef}
                 pullRequestPanelRef={pullRequestPanelRef}
               />
             </div>
@@ -116,6 +122,7 @@ function BoardItemDetails(props: {
               text={rewriteBoardThreadLinks(item.ask)}
               cwd={undefined}
               environmentId={environmentId}
+              mediaThreadRef={mediaThreadRef}
               pullRequestPanelRef={pullRequestPanelRef}
             />
           </div>
@@ -164,6 +171,7 @@ function BoardItemDetails(props: {
               text={rewriteBoardThreadLinks(item.body)}
               cwd={undefined}
               environmentId={environmentId}
+              mediaThreadRef={mediaThreadRef}
               pullRequestPanelRef={pullRequestPanelRef}
             />
           </div>

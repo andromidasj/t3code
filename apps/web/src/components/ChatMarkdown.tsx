@@ -246,6 +246,8 @@ interface ChatMarkdownProps {
   /** Folders the agent worked in before writing `text`, the latest first; read when a link opens. */
   agentDirectories?: (() => ReadonlyArray<string>) | undefined;
   threadRef?: ScopedThreadRef | undefined;
+  /** Fork: real thread used only for loading and previewing local media without opening files in its panel. */
+  mediaThreadRef?: ScopedThreadRef | undefined;
   pullRequestPanelRef?: ScopedThreadRef | undefined;
   environmentId?: EnvironmentId | undefined;
   onTaskListChange?: ((input: { markerOffset: number; checked: boolean }) => void) | undefined;
@@ -582,6 +584,7 @@ function useChatMarkdownState(
     cwd,
     agentDirectories,
     threadRef,
+    mediaThreadRef,
     pullRequestPanelRef,
     environmentId: explicitEnvironmentId,
     onTaskListChange,
@@ -604,9 +607,12 @@ function useChatMarkdownState(
   const resolvedTheme = useRenderedAppearance();
   const markdownRef = useRef<HTMLElement>(null);
   const mediaRequestId = useRef(0);
+  const mediaRef = threadRef ?? mediaThreadRef;
   const mediaScopeKey = [
     threadRef?.environmentId,
     threadRef?.threadId,
+    mediaRef?.environmentId,
+    mediaRef?.threadId,
     explicitEnvironmentId,
     cwd,
     imageBaseDir,
@@ -650,7 +656,8 @@ function useChatMarkdownState(
     reportFailure: false,
   });
   const pullRequestLinking = usePullRequestLinking(threadRef?.environmentId);
-  const environmentId = threadRef?.environmentId ?? explicitEnvironmentId ?? null;
+  const environmentId =
+    threadRef?.environmentId ?? mediaRef?.environmentId ?? explicitEnvironmentId ?? null;
   const canOperateHost = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const canOperatePreview = useEnvironmentScope(environmentId, AuthPreviewOperateScope);
   const isClientHost = useAtomValue(clientHostEnvironmentAtom(environmentId));
@@ -668,7 +675,7 @@ function useChatMarkdownState(
       source,
       resolvedFilePath,
       cwd,
-      threadRef,
+      threadRef: mediaRef,
       // Read the connection on click; reconnect replaces it, and subscriptions would refresh every markdown
       // context.
       httpBaseUrl:
@@ -1062,7 +1069,7 @@ function useChatMarkdownState(
         }
         onOpenInPanel={(path) => openFileInPanel(fileLinkMeta, path)}
         onOpenMedia={
-          threadRef && canPreviewMedia
+          mediaRef && canPreviewMedia
             ? () => openMarkdownMedia(mediaPath, fileLinkMeta.filePath)
             : undefined
         }
@@ -1123,6 +1130,7 @@ function useChatMarkdownState(
     issuesEnabled,
     skills,
     threadRef,
+    mediaRef,
     updateThreadPullRequestLink,
   };
   return {
@@ -1654,6 +1662,7 @@ const CHAT_MARKDOWN_COMPONENTS = {
       sourceControlMediaRepository,
       imageBaseDir,
       threadRef,
+      mediaRef,
       workspaceMutationId,
       renderContextReference,
       fileLinkChip,
@@ -1686,7 +1695,7 @@ const CHAT_MARKDOWN_COMPONENTS = {
         (filePath ?? classifiedSrc.split(/[?#]/, 1)[0] ?? "").split(/[\\/]/).at(-1) ||
         altText ||
         "Audio";
-      if (imageSource._tag !== "Direct" && !(filePath && threadRef)) {
+      if (imageSource._tag !== "Direct" && !(filePath && mediaRef)) {
         return <ChatMarkdownImageFallback alt={altText} copyMarkdown={copyMarkdown} kind="audio" />;
       }
       return (
@@ -1694,15 +1703,17 @@ const CHAT_MARKDOWN_COMPONENTS = {
           key={classifiedSrc}
           name={name}
           copyMarkdown={copyMarkdown}
-          {...(filePath && threadRef
+          {...(filePath && mediaRef
             ? {
-                environmentId: threadRef.environmentId,
+                environmentId: mediaRef.environmentId,
                 resource: {
                   _tag: "media-file" as const,
-                  threadId: threadRef.threadId,
+                  threadId: mediaRef.threadId,
                   path: filePath,
                 },
-                onOpen: () => useRightPanelStore.getState().openFile(threadRef, filePath),
+                ...(threadRef
+                  ? { onOpen: () => useRightPanelStore.getState().openFile(threadRef, filePath) }
+                  : {}),
               }
             : imageSource._tag === "Direct"
               ? { src: resolveProtocolRelativeMediaUrl(imageSource.uri) }
@@ -1809,13 +1820,13 @@ const CHAT_MARKDOWN_COMPONENTS = {
         />
       );
     }
-    if (imageSource._tag === "WorkspaceFile" && threadRef) {
+    if (imageSource._tag === "WorkspaceFile" && mediaRef) {
       return (
         <ChatMarkdownAssetImage
-          environmentId={threadRef.environmentId}
+          environmentId={mediaRef.environmentId}
           resource={{
             _tag: "media-file",
-            threadId: threadRef.threadId,
+            threadId: mediaRef.threadId,
             path: imageSource.path,
             ...(imageSource.relative ? { hostOnly: true as const } : {}),
           }}

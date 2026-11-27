@@ -135,3 +135,4 @@ reinstalls the current release.
 | ⌘1–9 start with the Space's Pinned Grid tiles         | none (fork-only)           | the Spaces patch is dropped            |
 | Hide the Space strip with one Space; New Space in ••• | none (fork-only)           | the Spaces patch is dropped            |
 | Running threads pill in the footer, by machine        | none (fork-only)           | upstream shows running threads         |
+| Native in-app image preview from Board items          | none (fork-only)           | the Board patch is dropped             |

@@ -212,6 +212,23 @@ export function BoardPage() {
   };
   const hostRef = selection === null ? null : hostRefFor(selection);
   const linksRef = hostRefFor(BOARD_LINKS_SELECTION);
+  const mediaThreadFor = (
+    deskSlug: string | null,
+    fallbackEnvironmentId: EnvironmentId | null,
+  ): ScopedThreadRef | null => {
+    const deskRef = deskSlug === null ? null : (deskThreads.get(deskSlug) ?? null);
+    if (deskRef !== null) {
+      return {
+        environmentId: EnvironmentId.make(deskRef.environmentId),
+        threadId: ThreadId.make(deskRef.threadId),
+      };
+    }
+    if (fallbackEnvironmentId === null) return null;
+    const fallback = threads.find((thread) => thread.environmentId === fallbackEnvironmentId);
+    return fallback === undefined
+      ? null
+      : { environmentId: fallback.environmentId, threadId: fallback.id };
+  };
   const panelModel = useBoardPanelModel(
     selection ?? BOARD_LINKS_SELECTION,
     hostRef,
@@ -459,6 +476,7 @@ export function BoardPage() {
             showDesk={filterDesk === null}
             time={formatShortTimestamp(row.event.t, timestampFormat)}
             environmentId={primaryConnectedId}
+            mediaThreadRef={mediaThreadFor(row.desk.slug, primaryConnectedId)}
             panelRef={linksRef}
           />
         ))}
@@ -737,6 +755,10 @@ export function BoardPage() {
                       selectedDeskThread === null ? null : () => openFullThread(selectedDeskThread)
                     }
                     markdownEnvironmentId={hostRef?.environmentId ?? null}
+                    mediaThreadRef={mediaThreadFor(
+                      selectedItem?.desk.slug ?? null,
+                      hostRef?.environmentId ?? null,
+                    )}
                     panelRef={hostRef}
                     onSelectItem={openItem}
                   />
@@ -1136,6 +1158,7 @@ function TodayRow(props: {
   showDesk: boolean;
   time: string;
   environmentId: EnvironmentId | null;
+  mediaThreadRef: ScopedThreadRef | null;
   /** The Board panel's entry that pull request links open in. */
   panelRef: ScopedThreadRef | null;
 }) {
@@ -1152,6 +1175,7 @@ function TodayRow(props: {
           text={rewriteBoardThreadLinks(row.event.text)}
           cwd={undefined}
           environmentId={props.environmentId ?? undefined}
+          mediaThreadRef={props.mediaThreadRef ?? undefined}
           pullRequestPanelRef={props.panelRef ?? undefined}
         />
       </div>

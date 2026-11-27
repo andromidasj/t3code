@@ -31,6 +31,7 @@ beforeEach(async () => {
       spacesEnabled: false,
       composerProjectMentions: false,
       hideComposerWorkspaceFiles: false,
+      disableHistorySwipeNavigation: false,
     }),
   );
 });

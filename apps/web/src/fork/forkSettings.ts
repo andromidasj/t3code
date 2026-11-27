@@ -47,6 +47,8 @@ export interface ForkSettings {
   readonly composerProjectMentions: boolean;
   /** Leave workspace files and folders out of the composer's `@` menu, and skip their search. */
   readonly hideComposerWorkspaceFiles: boolean;
+  /** Two-finger sideways swipes no longer go back or forward (they still switch Spaces). */
+  readonly disableHistorySwipeNavigation: boolean;
 }
 
 export const FORK_SETTINGS_STORAGE_KEY = "t3code:fork:settings:v1";
@@ -66,6 +68,7 @@ export const DEFAULT_FORK_SETTINGS: ForkSettings = {
   activeSpaceId: null,
   composerProjectMentions: true,
   hideComposerWorkspaceFiles: true,
+  disableHistorySwipeNavigation: true,
 };
 
 type ForkSettingsStorage = Pick<Storage, "getItem" | "setItem">;
@@ -235,6 +238,10 @@ function parseForkSettings(raw: string | null): ForkSettings {
       typeof record.hideComposerWorkspaceFiles === "boolean"
         ? record.hideComposerWorkspaceFiles
         : DEFAULT_FORK_SETTINGS.hideComposerWorkspaceFiles,
+    disableHistorySwipeNavigation:
+      typeof record.disableHistorySwipeNavigation === "boolean"
+        ? record.disableHistorySwipeNavigation
+        : DEFAULT_FORK_SETTINGS.disableHistorySwipeNavigation,
   };
 }
 

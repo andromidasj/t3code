@@ -62,6 +62,9 @@ keeps your sign-in, settings and threads.
      composer shows as one chip with the project's icon and full name (`@Eagle Eye` included).
      "Hide workspace files from @ mentions" (on by default) leaves files and folders out of
      that menu and skips their search; threads, machines and models stay.
+     "Disable swipe-to-navigate back/forward" (on by default) stops two-finger sideways swipes
+     from going back or forward and showing the arrow; the shortcuts and header arrows still
+     work, and swipes still switch Spaces.
    - Board: the header's View and Group menus pick what shows. Needs me counts live threads
      waiting on you plus ready bot-desk items, the same number as the sidebar's Board button and
      the bot chips; items not ready yet and later ones fold below it. Group (kept on this Mac)
@@ -116,3 +119,4 @@ reinstalls the current release.
 | Projects & bots in `@` mentions; hide files        | none (fork-only)           | upstream mentions projects with `@`    |
 | Keep sidebar background native under Spaces        | none (fork-only)           | the Spaces patch is dropped            |
 | `@` project mentions as one chip with their icon   | none (fork-only)           | the `@` mentions patch is dropped      |
+| Setting to turn off swipe back/forward             | none (fork-only)           | upstream makes the swipe optional      |

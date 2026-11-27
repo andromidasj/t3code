@@ -178,6 +178,22 @@ export function ForkSettingsSection() {
           />
         }
       />
+      <SettingsRow
+        devicePreference
+        title={gt("Disable swipe-to-navigate back/forward")}
+        description={gt(
+          "Stops two-finger horizontal swipes from triggering browser-style back/forward navigation. Keyboard shortcuts and header arrows still work.",
+        )}
+        control={
+          <Switch
+            checked={settings.disableHistorySwipeNavigation}
+            onCheckedChange={(checked) =>
+              updateForkSettings({ disableHistorySwipeNavigation: Boolean(checked) })
+            }
+            aria-label={gt("Disable swipe-to-navigate back/forward")}
+          />
+        }
+      />
       {settings.sidebarFilterPresets.length > 0 ? (
         <SettingsRow
           devicePreference

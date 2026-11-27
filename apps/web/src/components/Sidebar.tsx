@@ -3182,12 +3182,12 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       : undefined);
   const newThreadInProjectShortcutLabel = shortcutLabelForCommand(keybindings, "chat.newLocal");
   return (
-    <SidebarFolderDrop className={forkSpaces.enabled ? "isolate" : undefined}>
+    <SidebarFolderDrop className={forkSpaces.enabled ? "isolate overflow-x-clip" : undefined}>
       <SpaceFrame spaces={forkSpaces} />
       <SidebarChromeHeader isElectron={isElectron} />
       <SidebarContent
         ref={sidebarContentRef}
-        className="min-h-full"
+        className={cn("min-h-full", forkSpaces.enabled && "overflow-x-clip")}
         fixedHeader={
           <SidebarGroup className="z-[1]">
             <SidebarThreadHeader

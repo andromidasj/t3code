@@ -6,6 +6,7 @@ import {
   spaceShortcutIndex,
   stepSpaceSwipe,
   SWIPE_QUIET_MS,
+  SWIPE_REVERSE_GUARD_MS,
   wheelPixels,
 } from "./spaceSwipe.logic";
 
@@ -44,10 +45,34 @@ describe("Space swipe", () => {
     });
   });
 
-  it("resists at either end instead of switching", () => {
+  it("allows an immediate reverse swipe after the bounce guard without waiting out full cooldown", () => {
     const state = createSpaceSwipeState();
-    const step = stepSpaceSwipe(state, { dx: 200, now: 0, canGo: () => false });
-    expect(step).toEqual({ kind: "drag", offset: -26 });
+    expect(stepSpaceSwipe(state, { dx: 60, now: 0, canGo: always })).toEqual({
+      kind: "switch",
+      direction: 1,
+    });
+    // Right after switching, opposite-direction bounce is still ignored.
+    expect(stepSpaceSwipe(state, { dx: -60, now: 20, canGo: always }).kind).toBe("cooling");
+    // Past the short bounce guard, an intentional swipe back breaks cooldown immediately.
+    expect(
+      stepSpaceSwipe(state, { dx: -60, now: SWIPE_REVERSE_GUARD_MS + 20, canGo: always }),
+    ).toEqual({
+      kind: "switch",
+      direction: -1,
+    });
+  });
+
+  it("resists smoothly at either end instead of switching", () => {
+    const state = createSpaceSwipeState();
+    const first = stepSpaceSwipe(state, { dx: 40, now: 0, canGo: () => false });
+    const deeper = stepSpaceSwipe(state, { dx: 200, now: 16, canGo: () => false });
+    expect(first.kind).toBe("drag");
+    expect(deeper.kind).toBe("drag");
+    if (first.kind === "drag" && deeper.kind === "drag") {
+      expect(first.offset).toBeLessThan(0);
+      expect(deeper.offset).toBeLessThan(first.offset);
+      expect(deeper.offset).toBeGreaterThan(-24);
+    }
   });
 
   it("starts over after a pause", () => {

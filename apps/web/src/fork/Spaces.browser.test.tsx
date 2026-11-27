@@ -247,20 +247,70 @@ describe("Spaces sidebar", () => {
     await expect.element(page.getByText("Repo asks")).toBeInTheDocument();
 
     // One sideways flick moves one Space, however long its momentum tail.
-    const sidebar = page.getByTestId("space-tint").element().parentElement!;
+    // Dispatch on a real thread row inside the ScrollArea viewport so positive translateX
+    // during a swipe back exercises the horizontal overflow path.
+    let now = 1000;
+    const nowSpy = vi.spyOn(performance, "now").mockImplementation(() => now);
+    stack.defer(() => nowSpy.mockRestore());
+    const rowInWork = row(repoAsk)!;
     for (let index = 0; index < 12; index += 1) {
-      sidebar.dispatchEvent(
-        new WheelEvent("wheel", { deltaX: -30, deltaY: 1, bubbles: true, cancelable: true }),
+      now += 16;
+      rowInWork.dispatchEvent(
+        new WheelEvent("wheel", { deltaX: -20, deltaY: 1, bubbles: true, cancelable: true }),
+      );
+    }
+    await vi.waitFor(() => expect(shownSpace()).toContain("Eagle Eye"));
+    // Swiping forward and back over the scrollable list works in both directions, even right
+    // after reversing direction past the brief bounce guard.
+    const rowInEye = row(eagleMain)!;
+    now += 120;
+    for (let index = 0; index < 5; index += 1) {
+      now += 16;
+      rowInEye.dispatchEvent(
+        new WheelEvent("wheel", { deltaX: 20, deltaY: 0, bubbles: true, cancelable: true }),
+      );
+    }
+    await vi.waitFor(() => expect(shownSpace()).toContain("Work"));
+    const rowInWorkAgain = row(repoAsk)!;
+    now += 120;
+    for (let index = 0; index < 5; index += 1) {
+      now += 16;
+      rowInWorkAgain.dispatchEvent(
+        new WheelEvent("wheel", { deltaX: -20, deltaY: 0, bubbles: true, cancelable: true }),
       );
     }
     await vi.waitFor(() => expect(shownSpace()).toContain("Eagle Eye"));
     // A vertical scroll does not switch.
-    sidebar.dispatchEvent(new WheelEvent("wheel", { deltaY: 80, bubbles: true }));
+    row(eagleMain)!.dispatchEvent(new WheelEvent("wheel", { deltaY: 80, bubbles: true }));
     expect(shownSpace()).toContain("Eagle Eye");
 
     expect(navigate).not.toHaveBeenCalled();
     expect(readForkSettings().activeSpaceId).toBe("eye");
     expect(reveal.pendingKey).toBeNull();
+  });
+
+  it("aligns the bottom Space pill evenly with the second and third icons at non-16px root font sizes", async () => {
+    using stack = new DisposableStack();
+    const previousFontSize = document.documentElement.style.fontSize;
+    document.documentElement.style.fontSize = "13px";
+    stack.defer(() => {
+      document.documentElement.style.fontSize = previousFontSize;
+    });
+    await setup(stack, { spaces: [HOME, EYE, WORK], activeSpaceId: "eye" });
+    await using _screen = await renderSidebar();
+    await vi.waitFor(() => expect(shownSpace()).toContain("Eagle Eye"));
+
+    const pill = page.getByTestId("space-strip-pill").element();
+    for (const id of ["home", "eye", "work"]) {
+      await userEvent.click(strip(id));
+      await vi.waitFor(() => {
+        expect(strip(id).getAttribute("aria-selected")).toBe("true");
+        const pillBox = pill.getBoundingClientRect();
+        const tabBox = strip(id).getBoundingClientRect();
+        expect(Math.abs(pillBox.left - tabBox.left)).toBeLessThan(0.75);
+        expect(Math.abs(pillBox.width - tabBox.width)).toBeLessThan(0.75);
+      });
+    }
   });
 
   it("follows a thread opened from elsewhere into its Space", async () => {

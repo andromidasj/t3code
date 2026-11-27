@@ -11,8 +11,9 @@ import { SpaceGlyph, tintedStyle } from "./spaceLook";
 import { deleteSpace, moveSpace, setDefaultSpace, type SidebarSpace } from "./spaces.logic";
 import type { ForkSidebarSpaces } from "./useSidebarSpaces";
 
-// Each Space button is 32px wide with 4px between them; the pill slides by that pitch.
-const BUTTON_PITCH = 36;
+// Each Space button is w-8 (8 * --spacing) with gap-1 (1 * --spacing); the pill slides by 9.
+const pillTransform = (index: number) =>
+  `translateX(calc(${Math.max(0, index)} * var(--spacing) * 9))`;
 
 /** The Spaces as a row of icons above Settings, with a + to add one. */
 export function SpaceSwitcherStrip(props: { readonly spaces: ForkSidebarSpaces }) {
@@ -98,12 +99,13 @@ export function SpaceSwitcherStrip(props: { readonly spaces: ForkSidebarSpaces }
       >
         <span
           aria-hidden
+          data-testid="space-strip-pill"
           style={{
             ...tintedStyle(shownSpace.tint, { fill: 20, edge: 32 }),
-            transform: `translateX(${shownIndex * BUTTON_PITCH}px)`,
-            transitionTimingFunction: "cubic-bezier(0.3, 1.14, 0.44, 1)",
+            transform: pillTransform(shownIndex),
+            transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
           }}
-          className="pointer-events-none absolute top-0 left-0 h-7 w-8 rounded-lg transition-[transform,background-color,box-shadow] duration-450 motion-reduce:transition-none"
+          className="pointer-events-none absolute top-0 left-0 h-7 w-8 rounded-lg transition-[transform,background-color,box-shadow] duration-220 motion-reduce:transition-none"
         />
         {resolved.spaces.map((space, index) => {
           const on = space.id === shownSpace.id;
@@ -131,7 +133,7 @@ export function SpaceSwitcherStrip(props: { readonly spaces: ForkSidebarSpaces }
                     data-dot={dot ?? undefined}
                     style={on ? tintedStyle(space.tint, { text: 68 }) : undefined}
                     className={cn(
-                      "relative flex h-7 w-8 cursor-pointer items-center justify-center rounded-lg outline-none transition-colors duration-300 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                      "relative flex h-7 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg outline-none transition-colors duration-220 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                       !on &&
                         "text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground",
                     )}

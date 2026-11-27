@@ -9,7 +9,13 @@ import type {
   ScopedThreadRef,
 } from "@t3tools/contracts";
 import { useGT } from "gt-react";
-import { useEffect, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 
 import {
   completeSidebarRouteReveal,
@@ -97,14 +103,16 @@ const spaceFrame = () =>
 const prefersReducedMotion = () =>
   typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-/** Slides the Space's header, grid and list in from the side it came from. */
+/** Slides the Space's header, grid and list in from the side it came from after commit. */
 function playSpaceSlide(frame: HTMLElement | null, direction: -1 | 1): void {
   if (frame === null || prefersReducedMotion()) return;
   for (const element of frame.querySelectorAll<HTMLElement>("[data-fork-space-slide]")) {
+    for (const animation of element.getAnimations()) animation.cancel();
+    element.style.transition = "";
     element.style.transform = "";
     element.animate(
       [
-        { transform: `translateX(${direction * 28}px)`, opacity: 0.35 },
+        { transform: `translateX(${direction * 22}px)`, opacity: 0.45 },
         { transform: "none", opacity: 1 },
       ],
       { duration: 180, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
@@ -127,6 +135,9 @@ export function useSidebarSpaces(input: {
   const localLastVisitedAt = useUiStateStore((store) => store.threadLastVisitedAtById);
   const clearSelection = useThreadSelectionStore((store) => store.clearSelection);
   const [editorOpen, setEditorOpen] = useState(false);
+  const pendingSlideRef = useRef<{ readonly targetId: string; readonly direction: -1 | 1 } | null>(
+    null,
+  );
   const { routeReveal } = input;
   const enabled = settings.spacesEnabled;
   const state: SidebarSpacesState = {
@@ -181,6 +192,18 @@ export function useSidebarSpaces(input: {
       activeSpaceId: next.activeSpaceId,
     });
   const shownSpace = view?.shownSpace ?? null;
+  const shownSpaceId = shownSpace?.id ?? null;
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- animates the freshly committed Space DOM and resets scroll after a Space switch
+  useLayoutEffect(() => {
+    const pending = pendingSlideRef.current;
+    if (pending === null || pending.targetId !== shownSpaceId) return;
+    pendingSlideRef.current = null;
+    const frame = spaceFrame();
+    frame?.querySelector("[data-slot=scroll-area-viewport]")?.scrollTo({ top: 0 });
+    playSpaceSlide(frame, pending.direction);
+  }, [shownSpaceId]);
+
   const switchTo = (id: string) => {
     if (view === null || shownSpace === null || id === shownSpace.id) return;
     const { spaces } = view.resolved;
@@ -191,10 +214,8 @@ export function useSidebarSpaces(input: {
     completeSidebarRouteReveal(routeReveal);
     if (routeThreadKey !== null) followedRouteKeys.set(routeReveal, routeThreadKey);
     clearSelection();
+    pendingSlideRef.current = { targetId: id, direction: to > from ? 1 : -1 };
     save(setActiveSpace(state, id));
-    const frame = spaceFrame();
-    frame?.querySelector("[data-slot=scroll-area-viewport]")?.scrollTo({ top: 0 });
-    playSpaceSlide(frame, to > from ? 1 : -1);
   };
   const addSpace = () => {
     if (view === null) return;
@@ -203,8 +224,9 @@ export function useSidebarSpaces(input: {
     completeSidebarRouteReveal(routeReveal);
     if (routeThreadKey !== null) followedRouteKeys.set(routeReveal, routeThreadKey);
     clearSelection();
+    // Skip the slide when immediately opening the editor so its popover anchors cleanly to •••.
+    pendingSlideRef.current = null;
     save(createSpace(state, { id, name: gt("New Space"), ...look }));
-    playSpaceSlide(spaceFrame(), 1);
     setEditorOpen(true);
   };
   const toggleGrid = (threadKey: string) => {

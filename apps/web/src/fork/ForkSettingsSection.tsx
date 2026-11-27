@@ -113,7 +113,7 @@ export function ForkSettingsSection() {
         devicePreference
         title={gt("Bot / Background drawer")}
         description={gt(
-          "Fold threads bots started on their own (that you never wrote in) into a collapsible Bot / Background section.",
+          "Fold threads bots started on their own (that you never wrote in) into a collapsible Bot / Background section, and show how many threads are running beside Settings.",
         )}
         control={
           <Switch

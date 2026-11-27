@@ -32,6 +32,7 @@ import {
   useSidebar,
 } from "../ui/sidebar";
 import { isSidebarUtilityPage, useNavigateToMainApp } from "./mainAppLocation";
+import { RunningThreadsIndicator } from "~/fork/RunningThreadsIndicator";
 import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
 import { SidebarUpdateArchitectureWarning, SidebarUpdatePill } from "./SidebarUpdatePill";
@@ -274,6 +275,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
           />
         </>
       )}
+      <RunningThreadsIndicator />
       <SidebarThreadUndoNotice />
       <SidebarUpdatePill />
     </SidebarMenu>

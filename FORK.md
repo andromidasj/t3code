@@ -36,7 +36,11 @@ keeps your sign-in, settings and threads.
      (delegated, subagent, workflow or worktree threads and `· scheduled jobs` threads; no 👉
      title, nothing waiting on you, no failed run) into a collapsible Bot / Background shelf
      above Snoozed and Settled; its header shows `running / total` while any are running. A
-     thread a bot opened on its own, such as a digest, stays in the list. Right-click a thread in the list: "Move to
+     thread a bot opened on its own, such as a digest, stays in the list. While any thread is
+     running on any connected machine, a small pill with a spinner and the count appears in the
+     footer beside Settings and Usage; click it for the running threads grouped by machine
+     (bots' background lanes tagged `bg`), and click a row to open that thread. It hides when
+     nothing runs. Right-click a thread in the list: "Move to
      Bot / Background" or "Move to main sidebar" overrides that rule for the one thread (kept on
      this Mac; a thread waiting on you or failed never hides). Shift-,
      ⌘- or Ctrl-click in the sidebar's project menu picks several projects; with projects
@@ -130,3 +134,4 @@ reinstalls the current release.
 | Per-thread Bot / Background placement override        | none (fork-only)           | the sidebar filter patch is dropped    |
 | ⌘1–9 start with the Space's Pinned Grid tiles         | none (fork-only)           | the Spaces patch is dropped            |
 | Hide the Space strip with one Space; New Space in ••• | none (fork-only)           | the Spaces patch is dropped            |
+| Running threads pill in the footer, by machine        | none (fork-only)           | upstream shows running threads         |

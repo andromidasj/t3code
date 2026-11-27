@@ -264,12 +264,26 @@ describe("cross-Space badges", () => {
   it("counts threads that need the user and unread threads the user is in, per Space", () => {
     const ask = thread("ask", "max", { approval: true });
     const reply = thread("reply", "eagle", { unread: true });
-    const botReply = thread("bot reply", "chief", { unread: true, bot: true });
+    const botReply = thread("bot reply", "chief", {
+      unread: true,
+      bot: true,
+      title: "Chief · scheduled jobs",
+    });
     const lane = thread("lane", "repo", { delegatedFrom: "reply", run: "failed", bot: true });
     const result = view([ask, reply, botReply, lane]);
     expect(result.stats.get("work")).toMatchObject({ needsCount: 2, unreadCount: 0 });
     expect(result.stats.get("eye")).toMatchObject({ needsCount: 1, unreadCount: 1 });
     expect(result.stats.get("home")).toMatchObject({ needsCount: 0, unreadCount: 0 });
+    // A report a bot opened on its own waits on the user until they answer it.
+    const digest = thread("digest", "chief", {
+      unread: true,
+      bot: true,
+      title: "Chief · inbox digest · Nov 26",
+    });
+    expect(view([botReply, digest]).stats.get("home")).toMatchObject({
+      needsCount: 1,
+      unreadCount: 1,
+    });
   });
 
   it("places threads across environments through delegatedFrom", () => {

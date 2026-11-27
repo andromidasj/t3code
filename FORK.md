@@ -33,8 +33,11 @@ keeps your sign-in, settings and threads.
      does any reply with a question (a `?` outside code and links) and the newest handoff from
      another bot unless its reply starts with 🤖 or `FYI:` or only says there is nothing new.
      "Sidebar filter and Bot / Background" (on by default) adds All | Needs me under the
-     sidebar's pages and folds threads bots started that you never wrote in (no 👉 title, nothing
-     waiting on you) into a collapsible Bot / Background shelf above Snoozed and Settled. Shift-,
+     sidebar's pages and folds bots' background lanes you never wrote in (delegated, subagent,
+     workflow or worktree threads and `· scheduled jobs` threads; no 👉 title, nothing waiting
+     on you, no failed run) into a collapsible Bot / Background shelf above Snoozed and Settled.
+     A thread a bot opened on its own, such as a digest, stays in the list and counts under
+     Needs me until you reply or give it a ✅ title. Shift-,
      ⌘- or Ctrl-click in the sidebar's project menu picks several projects; with projects
      picked, "Save view" keeps that set as a chip; rename or delete views here. A project scope
      (menu, view or dock) also lists threads delegated or spawned from its threads, across
@@ -120,3 +123,4 @@ reinstalls the current release.
 | Keep sidebar background native under Spaces        | none (fork-only)           | the Spaces patch is dropped            |
 | `@` project mentions as one chip with their icon   | none (fork-only)           | the `@` mentions patch is dropped      |
 | Setting to turn off swipe back/forward             | none (fork-only)           | upstream makes the swipe optional      |
+| Bot / Background holds only bot lanes              | none (fork-only)           | the sidebar filter patch is dropped    |

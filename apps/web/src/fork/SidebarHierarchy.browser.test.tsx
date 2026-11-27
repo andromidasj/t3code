@@ -44,7 +44,7 @@ const project: Project = {
 function shell(
   id: string,
   title: string,
-  options: { readonly bot?: boolean; readonly failed?: boolean } = {},
+  options: { readonly bot?: boolean; readonly lane?: boolean; readonly failed?: boolean } = {},
 ) {
   const base = makeThreadFixture({
     environmentId,
@@ -64,18 +64,24 @@ function shell(
         }
       : {}),
   });
-  return options.bot ? { ...base, source: { ...base.source, createdBy: "agent" as const } } : base;
+  const bot = options.bot
+    ? { ...base, source: { ...base.source, createdBy: "agent" as const } }
+    : base;
+  // A coding lane an agent started in its own worktree.
+  return options.lane ? { ...bot, worktreePath: `/worktrees/${id}` } : bot;
 }
 
 const threads = [
   shell("mine", "My own thread"),
-  shell("nightly", "Nightly scan", { bot: true }),
-  shell("broken", "Broken watcher", { bot: true, failed: true }),
+  shell("nightly", "Nightly scan", { bot: true, lane: true }),
+  shell("jobs", "Desk · scheduled jobs", { bot: true }),
+  shell("broken", "Broken watcher", { bot: true, lane: true, failed: true }),
   shell("pointer", "👉 Pick a flight", { bot: true }),
+  shell("digest", "Chief · inbox digest · Nov 26", { bot: true }),
 ];
 
 describe("sidebar filter and Bot / Background drawer", () => {
-  it("separates bot threads into a drawer and filters by All and Needs me", async () => {
+  it("separates bot lanes into a drawer and filters by All and Needs me", async () => {
     using stack = new DisposableStack();
     const previousSettings = getClientSettings();
     stack.defer(() => __setClientSettingsForTests(previousSettings));
@@ -109,6 +115,8 @@ describe("sidebar filter and Bot / Background drawer", () => {
       .element(screen.getByRole("button", { name: "All", exact: true }))
       .toHaveAttribute("aria-pressed", "true");
     await expect.element(screen.getByText("👉 Pick a flight")).toBeInTheDocument();
+    // A report a bot opened on its own stays in the list.
+    await expect.element(screen.getByText("Chief · inbox digest · Nov 26")).toBeInTheDocument();
     const drawerToggle = screen.getByTestId("sidebar-bot-shelf-toggle");
     await vi.waitFor(() =>
       expect(drawerToggle.element().textContent?.replace(/\s+/g, " ")).toMatch(
@@ -116,15 +124,17 @@ describe("sidebar filter and Bot / Background drawer", () => {
       ),
     );
     await expect.element(drawerToggle).toHaveAttribute("aria-expanded", "false");
-    await expect.element(screen.getByRole("img", { name: "1 failed" })).toBeInTheDocument();
     expect(document.body.textContent).not.toContain("Nightly scan");
+    expect(document.body.textContent).not.toContain("Desk · scheduled jobs");
     await expect
-      .element(screen.getByRole("button", { name: /Needs me, 2 waiting/ }))
+      .element(screen.getByRole("button", { name: /Needs me, 3 waiting/ }))
       .toBeInTheDocument();
 
     await userEvent.click(drawerToggle);
     await expect.element(screen.getByText("Nightly scan")).toBeInTheDocument();
-    await expect.element(screen.getByText("Broken watcher")).toBeInTheDocument();
+    await expect.element(screen.getByText("Desk · scheduled jobs")).toBeInTheDocument();
+    // A lane whose run failed leaves the drawer (it waits under Needs me).
+    expect(document.body.textContent).not.toContain("Broken watcher");
     await expect.element(drawerToggle).toHaveAttribute("aria-expanded", "true");
     // The drawer's rows are full thread rows below its header.
     const header = document.querySelector('[data-testid="sidebar-bot-header"]')!;
@@ -142,6 +152,8 @@ describe("sidebar filter and Bot / Background drawer", () => {
     await vi.waitFor(() => expect(document.body.textContent).not.toContain("My own thread"));
     await expect.element(screen.getByText("👉 Pick a flight")).toBeInTheDocument();
     await expect.element(screen.getByText("Broken watcher")).toBeInTheDocument();
+    await expect.element(screen.getByText("Chief · inbox digest · Nov 26")).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain("Nightly scan");
     expect(localStorage.getItem("t3code:fork:sidebar-lens")).toBe('"needs-me"');
 
     await userEvent.click(screen.getByRole("button", { name: "All", exact: true }));

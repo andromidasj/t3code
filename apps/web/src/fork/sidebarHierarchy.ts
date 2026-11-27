@@ -6,8 +6,8 @@ import type { SidebarListItem } from "~/components/Sidebar.logic";
 import type { SidebarFilterPreset } from "./forkSettings";
 
 /**
- * The sidebar's quick filter. `all` lists the user's threads and folds threads bots started on
- * their own into a Bot / Background drawer; `needs-me` lists only threads waiting on the user.
+ * The sidebar's quick filter. `all` lists the user's threads and folds bots' background lanes into
+ * a Bot / Background drawer; `needs-me` lists only threads waiting on the user.
  */
 export type SidebarFilterLens = "all" | "needs-me";
 
@@ -33,6 +33,10 @@ export type SidebarHierarchyThread = Pick<
   | "hasActionableProposedPlan"
   | "pendingSubagentRequest"
   | "latestRun"
+  | "delegatedFrom"
+  | "lineage"
+  | "workflowRun"
+  | "worktreePath"
 > & { readonly source: { readonly createdBy: string } };
 
 export function sidebarThreadKey(thread: Pick<SidebarHierarchyThread, "environmentId" | "id">) {
@@ -54,20 +58,60 @@ function isWaitingOnUser(thread: SidebarHierarchyThread): boolean {
   );
 }
 
-/** The user started it, wrote in it, is needed in it, or a bot opened it for them. */
-export function isHumanThread(thread: SidebarHierarchyThread): boolean {
+/** A bot started it and the user never wrote in it. */
+function isBotOpened(thread: SidebarHierarchyThread): boolean {
+  return thread.source.createdBy !== "user" && thread.latestUserAuthoredMessageAt == null;
+}
+
+const SCHEDULED_JOBS_TITLE = /·\s*scheduled jobs\b/i;
+
+/**
+ * Work a bot runs out of the user's sight: a delegated or subagent lane, a workflow step, an
+ * agent's worktree, or a desk's scheduled-jobs thread (`Chief · scheduled jobs`).
+ */
+function isBackgroundLane(thread: SidebarHierarchyThread): boolean {
   return (
-    thread.source.createdBy === "user" ||
-    thread.latestUserAuthoredMessageAt != null ||
-    isWaitingOnUser(thread) ||
-    isPointedAtUser(thread)
+    thread.delegatedFrom != null ||
+    thread.lineage.parentThreadId != null ||
+    thread.lineage.relationshipToParent === "subagent" ||
+    thread.workflowRun != null ||
+    thread.worktreePath != null ||
+    SCHEDULED_JOBS_TITLE.test(thread.title)
   );
 }
 
-/** What the Needs me filter lists: waiting on the user, opened for them, or its last run failed. */
+/**
+ * What the Bot / Background drawer holds: a bot's background lane the user never wrote in, with
+ * nothing waiting on them and no failed run.
+ */
+export function isBackgroundBotThread(thread: SidebarHierarchyThread): boolean {
+  return (
+    isBotOpened(thread) &&
+    !isWaitingOnUser(thread) &&
+    !isPointedAtUser(thread) &&
+    thread.latestRun?.status !== "failed" &&
+    isBackgroundLane(thread)
+  );
+}
+
+/**
+ * Listed in the sidebar itself: everything but background lanes, so a report a bot opened on its
+ * own (`Chief · inbox digest · Nov 26`) stays in view.
+ */
+export function isHumanThread(thread: SidebarHierarchyThread): boolean {
+  return !isBackgroundBotThread(thread);
+}
+
+/**
+ * What the Needs me filter lists: waiting on the user, opened for them (👉), its last run failed,
+ * or a report a bot opened outside its lanes that the user has not answered or marked ✅ done.
+ */
 export function threadNeedsMe(thread: SidebarHierarchyThread): boolean {
   return (
-    isWaitingOnUser(thread) || isPointedAtUser(thread) || thread.latestRun?.status === "failed"
+    isWaitingOnUser(thread) ||
+    isPointedAtUser(thread) ||
+    thread.latestRun?.status === "failed" ||
+    (isBotOpened(thread) && !isBackgroundLane(thread) && !thread.title.trim().startsWith("✅"))
   );
 }
 
@@ -99,7 +143,6 @@ export interface SidebarBotDrawer<T> {
   /** The rows the sidebar lists under the drawer's header. */
   readonly listed: readonly T[];
   readonly expanded: boolean;
-  readonly failedCount: number;
   readonly runningCount: number;
 }
 
@@ -197,7 +240,6 @@ export function applySidebarHierarchy<
             threads: bots,
             listed: listedBots,
             expanded: options.botExpanded,
-            failedCount: bots.filter((thread) => thread.latestRun?.status === "failed").length,
             runningCount: bots.filter(isThreadRunning).length,
           }
         : null,

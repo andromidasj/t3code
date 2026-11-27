@@ -246,8 +246,6 @@ export function withoutThreadsShownAbove<
           ...view.drawer,
           threads: drawerThreads,
           listed: view.drawer.listed.filter((thread) => !shown(thread)),
-          failedCount: drawerThreads.filter((thread) => thread.latestRun?.status === "failed")
-            .length,
           runningCount: drawerThreads.filter(isThreadRunning).length,
         };
   return {

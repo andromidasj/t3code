@@ -9,6 +9,7 @@ import {
   applySidebarHierarchy,
   findSidebarFilterPreset,
   isProjectScopeMultiSelectClick,
+  isBackgroundBotThread,
   isHumanThread,
   parseSidebarFilterLens,
   removeSidebarFilterPreset,
@@ -35,13 +36,21 @@ function thread(
   overrides: Partial<Omit<Thread, "latestRun" | "source">> & {
     readonly createdBy?: "user" | "agent" | "system";
     readonly run?: RunStatus;
+    /** A lane delegated from another thread, the usual background bot thread. */
+    readonly lane?: boolean;
   } = {},
 ): Thread {
-  const { createdBy = "agent", run, ...rest } = overrides;
+  const { createdBy = "agent", run, lane = false, ...rest } = overrides;
   return {
     environmentId: EnvironmentId.make("env"),
     id: ThreadId.make(id),
     title: id,
+    delegatedFrom: lane
+      ? { environmentId: EnvironmentId.make("env"), threadId: ThreadId.make("parent"), title: "p" }
+      : null,
+    lineage: { rootThreadId: ThreadId.make(id), parentThreadId: null, relationshipToParent: null },
+    workflowRun: null,
+    worktreePath: null,
     latestUserAuthoredMessageAt: null,
     hasPendingApprovals: false,
     hasPendingUserInput: false,
@@ -103,34 +112,83 @@ describe("classification", () => {
     expect(isHumanThread(thread("pointer", { title: "  👉 Pick a flight" }))).toBe(true);
   });
 
-  it("leaves bot-started threads the user never wrote in to the background", () => {
-    expect(isHumanThread(thread("jobs"))).toBe(false);
-    expect(isHumanThread(thread("system", { createdBy: "system" }))).toBe(false);
-    expect(isHumanThread(thread("mid-pointer", { title: "Status 👉 later" }))).toBe(false);
-    expect(isHumanThread(thread("failed", { run: "failed" }))).toBe(false);
+  it("leaves bots' background lanes the user never wrote in to the drawer", () => {
+    const parent = ThreadId.make("parent");
+    expect(isBackgroundBotThread(thread("delegated", { lane: true }))).toBe(true);
+    expect(isBackgroundBotThread(thread("system", { createdBy: "system", lane: true }))).toBe(true);
+    expect(
+      isBackgroundBotThread(
+        thread("subagent", {
+          lineage: { rootThreadId: parent, parentThreadId: parent, relationshipToParent: null },
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      isBackgroundBotThread(
+        thread("workflow", { workflowRun: {} as NonNullable<Thread["workflowRun"]> }),
+      ),
+    ).toBe(true);
+    expect(isBackgroundBotThread(thread("worktree", { worktreePath: "/worktrees/lane" }))).toBe(
+      true,
+    );
+    expect(isBackgroundBotThread(thread("jobs", { title: "Chief · scheduled jobs" }))).toBe(true);
+    expect(
+      isBackgroundBotThread(thread("mid-pointer", { lane: true, title: "Status 👉 later" })),
+    ).toBe(true);
+    expect(isHumanThread(thread("lane", { lane: true }))).toBe(false);
+  });
+
+  it("keeps lanes that need the user, and every other thread, in the sidebar", () => {
+    expect(isHumanThread(thread("failed", { lane: true, run: "failed" }))).toBe(true);
+    expect(isHumanThread(thread("waiting", { lane: true, hasPendingUserInput: true }))).toBe(true);
+    expect(isHumanThread(thread("pointer", { lane: true, title: "👉 Review" }))).toBe(true);
+    expect(isHumanThread(thread("mine", { lane: true, createdBy: "user" }))).toBe(true);
+    expect(
+      isHumanThread(
+        thread("answered", { lane: true, latestUserAuthoredMessageAt: "2026-11-25T00:00:00Z" }),
+      ),
+    ).toBe(true);
+    // A report a bot opened on its own is no lane.
+    expect(isHumanThread(thread("digest", { title: "Chief · inbox digest · Nov 26" }))).toBe(true);
+    expect(isHumanThread(thread("system", { createdBy: "system" }))).toBe(true);
   });
 
   it("needs the user when waiting on them, opened for them, or the last run failed", () => {
-    expect(threadNeedsMe(thread("failed", { run: "failed" }))).toBe(true);
-    expect(threadNeedsMe(thread("pointer", { title: "👉 Choose" }))).toBe(true);
-    expect(threadNeedsMe(thread("approval", { hasPendingApprovals: true }))).toBe(true);
+    expect(threadNeedsMe(thread("failed", { lane: true, run: "failed" }))).toBe(true);
+    expect(threadNeedsMe(thread("pointer", { lane: true, title: "👉 Choose" }))).toBe(true);
+    expect(threadNeedsMe(thread("approval", { lane: true, hasPendingApprovals: true }))).toBe(true);
     expect(threadNeedsMe(thread("done", { run: "completed", createdBy: "user" }))).toBe(false);
+    expect(threadNeedsMe(thread("lane", { lane: true, run: "completed" }))).toBe(false);
+    expect(threadNeedsMe(thread("jobs", { title: "Chief · scheduled jobs" }))).toBe(false);
+  });
+
+  it("needs the user for a bot's own report until they answer it or mark it done", () => {
+    const digest = { title: "Chief · inbox digest · Nov 26", run: "completed" as const };
+    expect(threadNeedsMe(thread("digest", digest))).toBe(true);
+    expect(
+      threadNeedsMe(
+        thread("answered", { ...digest, latestUserAuthoredMessageAt: "2026-11-26T15:00:00Z" }),
+      ),
+    ).toBe(false);
+    expect(threadNeedsMe(thread("done", { ...digest, title: "✅ Inbox digest read" }))).toBe(false);
+    expect(threadNeedsMe(thread("mine", { ...digest, createdBy: "user" }))).toBe(false);
   });
 });
 
 describe("applySidebarHierarchy", () => {
   const human = thread("human", { createdBy: "user" });
-  const bot = thread("bot", { run: "completed" });
-  const botFailed = thread("bot-failed", { run: "failed" });
-  const botRunning = thread("bot-running", { run: "running" });
+  const bot = thread("bot", { lane: true, run: "completed" });
+  const botFailed = thread("bot-failed", { lane: true, run: "failed" });
+  const botRunning = thread("bot-running", { lane: true, run: "running" });
+  const report = thread("report", { title: "Chief · inbox digest", run: "completed" });
   const humanRunning = thread("human-running", { createdBy: "user", run: "running" });
   const pinned = thread("pinned", { createdBy: "user", pinnedAt: "x" } as never);
-  const pinnedWaiting = thread("pinned-waiting", { hasPendingUserInput: true });
+  const pinnedWaiting = thread("pinned-waiting", { lane: true, hasPendingUserInput: true });
   const snoozed = thread("snoozed", { createdBy: "user" });
   const settled = thread("settled", { createdBy: "user" });
   const base = partition({
     pinnedThreads: [pinned, pinnedWaiting],
-    activeThreads: [human, bot, botFailed],
+    activeThreads: [human, report, bot, botFailed],
     workingThreads: [humanRunning, botRunning],
     snoozedThreads: [snoozed],
     settledThreads: [settled],
@@ -138,41 +196,45 @@ describe("applySidebarHierarchy", () => {
 
   it("returns upstream's partition when off", () => {
     const result = applySidebarHierarchy(base, { ...options, enabled: false });
-    expect(ids(result.activeThreads)).toEqual(["human", "bot", "bot-failed"]);
+    expect(ids(result.activeThreads)).toEqual(["human", "report", "bot", "bot-failed"]);
     expect(ids(result.workingThreads)).toEqual(["human-running", "bot-running"]);
     expect(result.forkHierarchy.lens).toBeNull();
     expect(result.forkHierarchy.drawer).toBeNull();
     expect(result.visibleThreads).toBe(base.visibleThreads);
   });
 
-  it("folds bot threads into a closed drawer under All", () => {
+  it("folds bots' quiet lanes into a closed drawer under All, keeping reports and failures", () => {
     const result = applySidebarHierarchy(base, options);
     expect(ids(result.pinnedThreads)).toEqual(["pinned", "pinned-waiting"]);
-    expect(ids(result.activeThreads)).toEqual(["human"]);
+    expect(ids(result.activeThreads)).toEqual(["human", "report", "bot-failed"]);
     expect(ids(result.workingThreads)).toEqual(["human-running"]);
     expect(ids(result.snoozedThreads)).toEqual(["snoozed"]);
     expect(ids(result.settledThreads)).toEqual(["settled"]);
     const drawer = result.forkHierarchy.drawer!;
-    expect(ids(drawer.threads)).toEqual(["bot-running", "bot", "bot-failed"]);
+    expect(ids(drawer.threads)).toEqual(["bot-running", "bot"]);
     expect(drawer.listed).toEqual([]);
-    expect(drawer).toMatchObject({ expanded: false, failedCount: 1, runningCount: 1 });
-    expect(ids(result.forkHierarchy.hiddenThreads)).toEqual(["bot-running", "bot", "bot-failed"]);
-    expect(sidebarDrawerCount(result.forkHierarchy)).toBe(3);
+    expect(drawer).toMatchObject({ expanded: false, runningCount: 1 });
+    expect(ids(result.forkHierarchy.hiddenThreads)).toEqual(["bot-running", "bot"]);
+    expect(sidebarDrawerCount(result.forkHierarchy)).toBe(2);
   });
 
   it("lists the drawer's rows after the user's threads when open", () => {
     const result = applySidebarHierarchy(base, { ...options, botExpanded: true });
-    expect(ids(result.activeThreads)).toEqual(["human", "bot-running", "bot", "bot-failed"]);
-    expect([...result.forkHierarchy.botRowKeys]).toEqual(
-      [botRunning, bot, botFailed].map(sidebarThreadKey),
-    );
+    expect(ids(result.activeThreads)).toEqual([
+      "human",
+      "report",
+      "bot-failed",
+      "bot-running",
+      "bot",
+    ]);
+    expect([...result.forkHierarchy.botRowKeys]).toEqual([botRunning, bot].map(sidebarThreadKey));
     expect(result.forkHierarchy.hiddenThreads).toEqual([]);
   });
 
   it("keeps the open bot thread listed while the drawer is closed", () => {
     const routeThreadKey = sidebarThreadKey(bot);
     const result = applySidebarHierarchy(base, { ...options, routeThreadKey });
-    expect(ids(result.activeThreads)).toEqual(["human", "bot"]);
+    expect(ids(result.activeThreads)).toEqual(["human", "report", "bot-failed", "bot"]);
     expect([...result.forkHierarchy.botRowKeys]).toEqual([routeThreadKey]);
   });
 
@@ -188,7 +250,7 @@ describe("applySidebarHierarchy", () => {
     const routeThreadKey = sidebarThreadKey(settled);
     const result = applySidebarHierarchy(base, { ...options, lens: "needs-me", routeThreadKey });
     expect(ids(result.pinnedThreads)).toEqual(["pinned-waiting"]);
-    expect(ids(result.activeThreads)).toEqual(["bot-failed"]);
+    expect(ids(result.activeThreads)).toEqual(["report", "bot-failed"]);
     expect(ids(result.workingThreads)).toEqual([]);
     const working = applySidebarHierarchy(
       partition({ workingThreads: [botFailed, botRunning], activeThreads: [human] }),
@@ -200,31 +262,34 @@ describe("applySidebarHierarchy", () => {
     expect(ids(result.snoozedThreads)).toEqual([]);
     expect(ids(result.settledThreads)).toEqual(["settled"]);
     expect(result.forkHierarchy.drawer).toBeNull();
-    expect(result.forkHierarchy.needsMeCount).toBe(2);
+    expect(result.forkHierarchy.needsMeCount).toBe(3);
     expect(sidebarSettledCount(result.forkHierarchy, 1, 40)).toBe(1);
     expect(sidebarSettledCount(applySidebarHierarchy(base, options).forkHierarchy, 1, 40)).toBe(40);
   });
 
   it("counts what needs the user across pinned, active and working whatever the filter", () => {
     for (const lens of ["all", "needs-me"] as const) {
-      expect(applySidebarHierarchy(base, { ...options, lens }).forkHierarchy.needsMeCount).toBe(2);
+      expect(applySidebarHierarchy(base, { ...options, lens }).forkHierarchy.needsMeCount).toBe(3);
     }
   });
 
   it("keeps drawer rows out of boring mode's folders", () => {
     const result = applySidebarHierarchy(base, { ...options, botExpanded: true });
-    expect(ids(withoutBotRows(result.activeThreads, result.forkHierarchy))).toEqual(["human"]);
+    expect(ids(withoutBotRows(result.activeThreads, result.forkHierarchy))).toEqual([
+      "human",
+      "report",
+      "bot-failed",
+    ]);
     expect(ids(sidebarBotRows(result.activeThreads, result.forkHierarchy))).toEqual([
       "bot-running",
       "bot",
-      "bot-failed",
     ]);
   });
 });
 
 describe("drawer marker", () => {
   const human = thread("human", { createdBy: "user" });
-  const bot = thread("bot");
+  const bot = thread("bot", { lane: true });
   const row = (entry: Thread): SidebarListItem => ({
     kind: "thread",
     key: sidebarThreadKey(entry),

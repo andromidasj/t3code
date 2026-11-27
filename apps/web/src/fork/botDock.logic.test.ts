@@ -165,7 +165,7 @@ describe("bot dock tiles", () => {
       thread("snoozed", "chief", { snoozedUntil: "2026-11-26T00:00:00.000Z" }),
       thread("woke", "chief", { snoozedUntil: "2026-11-24T00:00:00.000Z" }),
       thread("subagent", "chief", { subagentOf: "new" }),
-      thread("job", "chief", { bot: true }),
+      thread("job", "chief", { bot: true, title: "Chief · scheduled jobs" }),
     ];
     const tile = tileOf(dock([group("chief")], threads), "chief");
     expect(tile.mainThread).toBeNull();
@@ -295,7 +295,7 @@ describe("threads shown above the list", () => {
     const second = thread("second", "penny", { pinOrder: "b" });
     const active = thread("active", "chief");
     const lane = thread("lane", "chief", { bot: true, run: "running" });
-    const otherBot = thread("other bot", "chief", { bot: true, run: "failed" });
+    const otherBot = thread("other bot", "chief", { bot: true, run: "completed" });
     const settled = thread("settled", "chief", { settled: true });
     const partition = {
       pinnedThreads: [main, second],
@@ -310,7 +310,6 @@ describe("threads shown above the list", () => {
           threads: [lane, otherBot],
           listed: [lane],
           expanded: true,
-          failedCount: 1,
           runningCount: 1,
         },
         botRowKeys: new Set([sidebarThreadKey(lane)]),
@@ -325,7 +324,6 @@ describe("threads shown above the list", () => {
     expect(result.forkHierarchy.drawer?.threads.map((entry) => entry.id)).toEqual(["other bot"]);
     expect(result.forkHierarchy.drawer?.listed).toEqual([]);
     expect(result.forkHierarchy.drawer?.runningCount).toBe(0);
-    expect(result.forkHierarchy.drawer?.failedCount).toBe(1);
     expect(result.forkHierarchy.botRowKeys.size).toBe(0);
     expect(result.forkHierarchy.hiddenThreads.map((entry) => entry.id)).toEqual([
       "other bot",
@@ -347,7 +345,7 @@ describe("threads shown above the list", () => {
       forkHierarchy: {
         lens: "all" as const,
         needsMeCount: 0,
-        drawer: { threads: [lane], listed: [], expanded: false, failedCount: 0, runningCount: 0 },
+        drawer: { threads: [lane], listed: [], expanded: false, runningCount: 0 },
         botRowKeys: new Set<string>(),
         hiddenThreads: [lane] as Thread[],
       },

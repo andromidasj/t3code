@@ -228,13 +228,6 @@ export function SidebarBotDrawerHeader(props: {
         data-testid="sidebar-bot-shelf-toggle"
         accessory={
           <span className="flex items-center gap-1.5 font-normal">
-            {drawer.failedCount > 0 ? (
-              <span
-                className="size-1.5 rounded-full bg-destructive"
-                role="img"
-                aria-label={gt("{count} failed", { count: drawer.failedCount })}
-              />
-            ) : null}
             {drawer.runningCount > 0 ? (
               <span role="img" aria-label={gt("{count} running", { count: drawer.runningCount })}>
                 <Spinner size="xs" tone="muted" />

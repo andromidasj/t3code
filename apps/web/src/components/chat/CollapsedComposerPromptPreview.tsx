@@ -16,6 +16,8 @@ import {
 import type { ReactElement } from "react";
 
 import { splitPromptIntoComposerSegments } from "~/composer-editor-mentions";
+import { findComposerProjectMention } from "~/fork/composerProjectMentionRegistry";
+import { ComposerProjectMentionChip } from "~/fork/ComposerProjectMentionChip";
 import { composerFileNeedsReattach } from "~/composerDraftStore";
 import type {
   ComposerDraftContextRecord,
@@ -83,7 +85,11 @@ export function CollapsedComposerPromptPreview(props: {
             </ContextChipLabel>
           </ContextChip>
         );
-      case "mention":
+      case "mention": {
+        const projectMention = findComposerProjectMention(segment.path);
+        if (projectMention) {
+          return <ComposerProjectMentionChip key={key} mention={projectMention} inert />;
+        }
         return (
           <ContextChipShell
             key={key}
@@ -92,6 +98,7 @@ export function CollapsedComposerPromptPreview(props: {
             label={fileDisplayName(segment.path)}
           />
         );
+      }
       case "context-reference": {
         const entry = resolvedContextRecord(props.contextRecords, segment.kind, segment.contextId);
         return entry ? (

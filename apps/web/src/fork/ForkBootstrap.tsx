@@ -5,18 +5,20 @@ import { useEffect, useEffectEvent, useLayoutEffect } from "react";
 import { BOARD_PATH, startBoardReturnTracking, useLeaveBoard } from "./boardNavigation";
 import { isBoardShortcut } from "./boardShortcut";
 import { readForkSettings } from "./forkSettings";
+import { useComposerProjectMentionRegistrySync } from "./useComposerProjectMentions";
 
 // Once per app session: leaving the Board and coming back to "/" must not redirect again.
 let launchHandled = false;
 
 /**
  * Fork behavior that needs the router: the Board shortcut, opening the Board on launch, and
- * remembering where the Board's Back button returns to.
+ * remembering where the Board's Back button returns to, and the project names `@` mentions chip.
  */
 export function ForkBootstrap() {
   const navigate = useNavigate();
   const router = useRouter();
   const leaveBoard = useLeaveBoard();
+  useComposerProjectMentionRegistrySync();
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- subscribes to router navigation to remember the Board's return page
   useEffect(() => startBoardReturnTracking(router), [router]);

@@ -122,3 +122,104 @@ export function splitComposerProjectMentions<T extends { readonly type: string }
     ? { projects, rest: items }
     : { projects, rest: items.filter((item) => item.type !== "fork-project") };
 }
+
+/** A typed `@Name` that names a project, shaped like the composer's file mention tokens. */
+export interface ComposerProjectMentionToken {
+  readonly type: "mention";
+  /** The project's display name as the sidebar spells it. */
+  readonly value: string;
+  /** The text as written, e.g. `@eagle eye`. */
+  readonly source: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+const projectMentionPatterns = new WeakMap<
+  ReadonlyArray<string>,
+  { readonly regex: RegExp; readonly byLowerName: ReadonlyMap<string, string> } | null
+>();
+
+function projectMentionPattern(names: ReadonlyArray<string>) {
+  const cached = projectMentionPatterns.get(names);
+  if (cached !== undefined) return cached;
+  const byLowerName = new Map<string, string>();
+  for (const name of names) {
+    const trimmed = name.trim();
+    if (trimmed !== "" && !byLowerName.has(trimmed.toLowerCase())) {
+      byLowerName.set(trimmed.toLowerCase(), trimmed);
+    }
+  }
+  // Longest first, so `@Eagle Eye Review` is not read as `@Eagle Eye` plus text.
+  const alternatives = [...byLowerName.values()]
+    .sort((a, b) => b.length - a.length)
+    .map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  // Like upstream's `@file` and model mentions, a name chips only once whitespace follows it
+  // (closing punctuation may come between), so typing `@Eagle` cannot lock before ` Eye`, and
+  // `@penny.com` and `foo@penny` stay text.
+  const pattern =
+    alternatives.length === 0
+      ? null
+      : {
+          regex: new RegExp(
+            `(?<=^|[\\s(\\[{"',:;])@(${alternatives.join("|")})(?=[.,!?:;)\\]}"']*\\s)`,
+            "giu",
+          ),
+          byLowerName,
+        };
+  projectMentionPatterns.set(names, pattern);
+  return pattern;
+}
+
+/** Every `@Name` in `text` that names one of `names`, case-insensitively, in text order. */
+export function collectComposerProjectMentions(
+  text: string,
+  names: ReadonlyArray<string>,
+): ComposerProjectMentionToken[] {
+  const pattern = projectMentionPattern(names);
+  if (pattern === null || !text.includes("@")) return [];
+  return [...text.matchAll(pattern.regex)].map((match) => {
+    const start = match.index ?? 0;
+    const written = match[1] ?? "";
+    return {
+      type: "mention",
+      value: pattern.byLowerName.get(written.toLowerCase()) ?? written,
+      source: match[0],
+      start,
+      end: start + match[0].length,
+    };
+  });
+}
+
+interface InlineTokenRange {
+  readonly type: string;
+  readonly source: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+const overlaps = (a: InlineTokenRange, b: { readonly start: number; readonly end: number }) =>
+  a.start < b.end && a.end > b.start;
+
+/**
+ * The composer's inline tokens with project mentions added. A project mention replaces the bare
+ * `@word` file mention it overlaps (`@Eagle` of `@Eagle Eye`), and yields to file links and math.
+ */
+export function withComposerProjectMentionTokens<T extends InlineTokenRange>(
+  text: string,
+  tokens: ReadonlyArray<T>,
+  names: ReadonlyArray<string>,
+  mathRanges: (text: string) => ReadonlyArray<{ readonly start: number; readonly end: number }>,
+): ReadonlyArray<T | ComposerProjectMentionToken> {
+  const found = collectComposerProjectMentions(text, names);
+  if (found.length === 0) return tokens;
+  const blocked = [
+    ...tokens.filter((token) => token.type === "mention" && token.source.startsWith("[")),
+    ...mathRanges(text),
+  ];
+  const kept = found.filter((mention) => !blocked.some((range) => overlaps(mention, range)));
+  if (kept.length === 0) return tokens;
+  return [
+    ...tokens.filter((token) => !kept.some((mention) => overlaps(token, mention))),
+    ...kept,
+  ].sort((left, right) => left.start - right.start);
+}

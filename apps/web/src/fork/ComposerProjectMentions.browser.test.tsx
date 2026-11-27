@@ -16,6 +16,7 @@ import { getRouter } from "~/router";
 import {
   ENVIRONMENT_ID,
   answerRpc,
+  dispatchedCommands,
   installFakeEnvironment,
   threadWithHistory,
   type FakeDriver,
@@ -59,6 +60,7 @@ it("lists projects first in the @ menu, inserts @Name, and hides workspace files
     extraProjects: [
       { id: ProjectId.make("project-penny"), title: "Penny" },
       { id: ProjectId.make("project-eagle"), title: "Eagle Eye" },
+      { id: ProjectId.make("project-eagle-review"), title: "Eagle Eye Review" },
     ],
   });
   const searches: unknown[] = [];
@@ -105,7 +107,7 @@ it("lists projects first in the @ menu, inserts @Name, and hides workspace files
   expect(document.querySelector("[data-composer-item-id]")).toBeNull();
 
   await userEvent.keyboard("and @eag");
-  await expect.element(page.getByRole("option", { name: /Eagle Eye/ })).toBeVisible();
+  await expect.element(page.getByRole("option", { name: "Eagle Eye", exact: true })).toBeVisible();
   await userEvent.keyboard("{Tab}");
   await vi.waitFor(() => expect(prompt()).toBe("ask @Penny and @Eagle Eye "));
 
@@ -118,6 +120,80 @@ it("lists projects first in the @ menu, inserts @Name, and hides workspace files
     ids.findLastIndex((id) => id.startsWith("fork-project:")),
   );
   expect(searches.length).toBeGreaterThan(0);
+});
+
+it("shows a picked project as one chip with its icon and sends plain @Name text", async () => {
+  updateForkSettings({ composerProjectMentions: true, hideComposerWorkspaceFiles: true });
+  const thread = threadWithHistory("thread-mention-chip", 1);
+  using _environment = installFakeEnvironment([thread], {
+    acceptCommands: true,
+    extraProjects: [
+      { id: ProjectId.make("project-penny"), title: "Penny" },
+      { id: ProjectId.make("project-eagle"), title: "Eagle Eye" },
+      { id: ProjectId.make("project-eagle-review"), title: "Eagle Eye Review" },
+    ],
+  });
+  __setClientSettingsForTests({
+    ...DEFAULT_CLIENT_SETTINGS,
+    onboardingCompletedAt: "2026-01-01T00:00:00.000Z",
+  });
+  const router = getRouter(
+    createMemoryHistory({ initialEntries: [`/${ENVIRONMENT_ID}/${thread.id}`] }),
+  );
+  await router.load();
+  await using screen = await render(<AppRoot router={router} />, { router: false });
+  await expect.element(page.getByText("Answer 0 for thread-mention-chip.")).toBeVisible();
+
+  const editor = screen.getByRole("textbox", { name: `Message ${thread.title}`, exact: true });
+  const prompt = () =>
+    useComposerDraftStore.getState().getComposerDraft(scopeThreadRef(ENVIRONMENT_ID, thread.id))
+      ?.prompt;
+  const chips = () =>
+    [...editor.element().querySelectorAll<HTMLElement>("[data-composer-mention-chip]")].map(
+      (chip) => ({
+        text: chip.querySelector("[data-slot=context-chip-label]")?.textContent,
+        project: chip.dataset.forkProjectMention ?? null,
+        // The project's favicon or monogram, not a file icon.
+        icon: chip.firstElementChild?.matches("[data-slot=context-chip-label]") === false,
+      }),
+    );
+  await userEvent.click(editor);
+  await userEvent.keyboard("ask @eagle");
+  const eagleEye = page.getByRole("option", { name: "Eagle Eye", exact: true });
+  await expect.element(eagleEye).toBeVisible();
+  await vi.waitFor(() => expect(eagleEye.element().getAttribute("aria-selected")).toBe("true"));
+  await userEvent.keyboard("{Enter}");
+  await vi.waitFor(() => expect(prompt()).toBe("ask @Eagle Eye "));
+  await vi.waitFor(() =>
+    expect(chips()).toEqual([{ text: "Eagle Eye", project: expect.any(String), icon: true }]),
+  );
+  expect(editor.element().textContent).not.toContain("@");
+  await vi.waitFor(() => expect(document.querySelector("[data-composer-item-id]")).toBeNull());
+
+  await userEvent.keyboard("and @eagle");
+  const review = page.getByRole("option", { name: "Eagle Eye Review", exact: true });
+  await expect.element(review).toBeVisible();
+  await userEvent.keyboard("{ArrowDown}");
+  await vi.waitFor(() => expect(review.element().getAttribute("aria-selected")).toBe("true"));
+  await userEvent.keyboard("{Enter}");
+  await vi.waitFor(() => expect(prompt()).toBe("ask @Eagle Eye and @Eagle Eye Review "));
+  await vi.waitFor(() =>
+    expect(chips().map((chip) => chip.text)).toEqual(["Eagle Eye", "Eagle Eye Review"]),
+  );
+
+  // Backspace removes the whole chip, not one letter of its name.
+  await userEvent.keyboard("{Backspace}{Backspace}");
+  await vi.waitFor(() => expect(prompt()).toBe("ask @Eagle Eye and "));
+  await userEvent.keyboard("hi{Enter}");
+  await vi.waitFor(() =>
+    expect(
+      dispatchedCommands().some(
+        (command) =>
+          command.type === "message.dispatch" &&
+          JSON.stringify(command).includes("ask @Eagle Eye and hi"),
+      ),
+    ).toBe(true),
+  );
 });
 
 it("leaves projects out of the @ menu when the setting is off", async () => {

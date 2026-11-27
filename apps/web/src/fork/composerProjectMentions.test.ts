@@ -4,9 +4,18 @@ import { describe, expect, it } from "vite-plus/test";
 import type { SidebarProjectSnapshot } from "~/sidebarProjectGrouping";
 
 import {
+  collectComposerInlineTokens,
+  composerMathRanges,
+} from "@t3tools/shared/composerInlineTokens";
+import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
+import { markdownMathRanges } from "~/markdown/wordsHast";
+
+import {
+  collectComposerProjectMentions,
   composerProjectMentionText,
   matchComposerProjectMentionItems,
   splitComposerProjectMentions,
+  withComposerProjectMentionTokens,
 } from "./composerProjectMentions";
 
 const BOTS = EnvironmentId.make("env-bots");
@@ -150,5 +159,94 @@ describe("splitComposerProjectMentions", () => {
     expect(split.rest).toEqual([{ type: "thread" }, { type: "path" }]);
     const plain = [{ type: "thread" }];
     expect(splitComposerProjectMentions(plain).rest).toBe(plain);
+  });
+});
+
+describe("collectComposerProjectMentions", () => {
+  const names = ["Penny", "Eagle Eye", "Eagle Eye Review"];
+  const sources = (text: string, list: ReadonlyArray<string> = names) =>
+    collectComposerProjectMentions(text, list).map((token) => [token.source, token.value]);
+
+  it("matches a one-word name before whitespace", () => {
+    expect(collectComposerProjectMentions("ask @Penny about it", names)).toEqual([
+      { type: "mention", value: "Penny", source: "@Penny", start: 4, end: 10 },
+    ]);
+  });
+
+  it("matches a name with spaces as one mention", () => {
+    expect(sources("@Eagle Eye please")).toEqual([["@Eagle Eye", "Eagle Eye"]]);
+  });
+
+  it("prefers the longest name", () => {
+    expect(sources("@Eagle Eye Review now and @Eagle Eye now")).toEqual([
+      ["@Eagle Eye Review", "Eagle Eye Review"],
+      ["@Eagle Eye", "Eagle Eye"],
+    ]);
+  });
+
+  it("allows closing punctuation and opening punctuation around the name", () => {
+    expect(sources('@Eagle Eye, then (@Penny) and "@penny." ok')).toEqual([
+      ["@Eagle Eye", "Eagle Eye"],
+      ["@Penny", "Penny"],
+      ["@penny", "Penny"],
+    ]);
+  });
+
+  it("matches case-insensitively and keeps the text as written", () => {
+    expect(sources("hi @eagle eye ")).toEqual([["@eagle eye", "Eagle Eye"]]);
+  });
+
+  it("waits for whitespace, so a name being typed does not match yet", () => {
+    expect(sources("ask @Penny")).toEqual([]);
+    expect(sources("ask @Eagle ")).toEqual([]);
+  });
+
+  it("ignores emails, mid-word @ and longer words", () => {
+    expect(
+      sources("mail foo@penny.com or @penny.com or x@Penny or @Pennyworth or @Penny's "),
+    ).toEqual([]);
+  });
+
+  it("finds nothing without names", () => {
+    expect(sources("ask @Penny ", [])).toEqual([]);
+  });
+
+  it("escapes regex characters in names", () => {
+    expect(sources("ping @C++ (bot) now", ["C++ (bot)"])).toEqual([["@C++ (bot)", "C++ (bot)"]]);
+  });
+});
+
+describe("withComposerProjectMentionTokens", () => {
+  const names = ["Eagle Eye", "Penny"];
+  const merged = (text: string) =>
+    withComposerProjectMentionTokens(
+      text,
+      collectComposerInlineTokens(text, { findMath: markdownMathRanges }),
+      names,
+      (value) => composerMathRanges(value, markdownMathRanges),
+    ).map((token) => [token.type, token.source]);
+
+  it("replaces the split file mention with one project mention", () => {
+    expect(merged("ask @Eagle Eye about $ui ")).toEqual([
+      ["mention", "@Eagle Eye"],
+      ["skill", "$ui"],
+    ]);
+    expect(merged("ask @Penny, then @AGENTS.md ")).toEqual([
+      ["mention", "@Penny"],
+      ["mention", "@AGENTS.md"],
+    ]);
+  });
+
+  it("leaves file links and math alone", () => {
+    const link = serializeComposerFileLink("docs/a @Penny b.md");
+    expect(merged(`see ${link} `)).toEqual([["mention", link]]);
+    expect(merged("formula $x @Penny y$ done")).toEqual([]);
+  });
+
+  it("returns the same tokens when nothing names a project", () => {
+    const tokens = collectComposerInlineTokens("read @README.md ");
+    expect(withComposerProjectMentionTokens("read @README.md ", tokens, names, () => [])).toBe(
+      tokens,
+    );
   });
 });

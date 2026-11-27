@@ -133,6 +133,8 @@ import { AssistantCitationChip } from "./chat/AssistantCitationChip";
 import { ModelMentionChip, modelMentionKey, modelMentionKeysAtom } from "./chat/ModelMentionChip";
 import { getTimelinePageScrollKey } from "./chat/pageScrollController";
 import { ContextChip } from "./ContextChip";
+import { useComposerProjectMention } from "~/fork/composerProjectMentionRegistry";
+import { ComposerProjectMentionChip } from "~/fork/ComposerProjectMentionChip";
 import {
   ComposerContextActionsContext,
   ComposerContextReferenceChip,
@@ -300,6 +302,20 @@ function ComposerMentionNodeView({ node }: NodeViewProps) {
   const nativeDrag = useNativeFileDrag(actions.environmentId, () =>
     resolvePathLinkTarget(path, actions.cwd ?? ""),
   );
+  const projectMention = useComposerProjectMention(path);
+  if (projectMention) {
+    return (
+      <NodeViewWrapper as="span" className={CHIP_NODE_SELECTION_CLASS_NAME}>
+        <ComposerProjectMentionChip
+          mention={projectMention}
+          dir="ltr"
+          contentEditable={false}
+          spellCheck={false}
+          data-composer-mention-chip="true"
+        />
+      </NodeViewWrapper>
+    );
+  }
   const chip = (
     <ContextChip
       {...nativeDrag}

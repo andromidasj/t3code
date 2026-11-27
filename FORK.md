@@ -113,3 +113,4 @@ reinstalls the current release.
 | Spaces swipe-back, strip pill and slide polish     | none (fork-only)           | the Spaces patch is dropped            |
 | Keep bot turns with questions or new handoffs open | none (fork-only)           | the folding patch is dropped           |
 | Projects & bots in `@` mentions; hide files        | none (fork-only)           | upstream mentions projects with `@`    |
+| Keep sidebar background native under Spaces        | none (fork-only)           | the Spaces patch is dropped            |

@@ -8,6 +8,7 @@ import {
   asksUserQuestion,
   flagsUser,
   foldAgentTurns,
+  hasMarkdownImage,
   isExplicitRoutineReply,
   reuseFoldRows,
   splitTimelineTurns,
@@ -129,12 +130,12 @@ describe("foldAgentTurns", () => {
     expect(foldAgentTurns(rows, NONE)).toBe(rows);
   });
 
-  it("folds consecutive agent and automation turns into one strip", () => {
+  it("folds consecutive routine agent and automation turns into one strip", () => {
     const rows = [
       human("u1"),
       reply("a1", "sure"),
       agent("g1"),
-      reply("a2", "Noted the relay."),
+      reply("a2", "🤖 FYI: noted the relay."),
       automation("j1"),
       reply("a3", "Backup finished OK.\nDetails follow."),
       human("u2"),
@@ -165,21 +166,36 @@ describe("foldAgentTurns", () => {
   });
 
   it("splits groups around a human turn", () => {
-    const rows = [agent("g1"), reply("a1", "x"), human("u1"), agent("g2"), reply("a2", "FYI: y")];
+    const rows = [
+      agent("g1"),
+      reply("a1", "FYI: x"),
+      human("u1"),
+      agent("g2"),
+      reply("a2", "FYI: y"),
+    ];
     const folded = foldAgentTurns(rows, NONE);
     expect(ids(folded)).toEqual([agentTurnFoldId("g1"), "u1", agentTurnFoldId("g2")]);
   });
 
   it("shows the folded rows under the strip while expanded", () => {
     const id = agentTurnFoldId("g1");
-    const rows = [agent("g1"), reply("a1", "x"), agent("g2"), reply("a2", "y"), human("u1")];
+    const rows = [
+      agent("g1"),
+      reply("a1", "FYI: x"),
+      agent("g2"),
+      reply("a2", "FYI: y"),
+      human("u1"),
+    ];
     const folded = foldAgentTurns(rows, { expandedGroupIds: new Set([id]) });
     expect(ids(folded)).toEqual([id, "g1", "a1", "g2", "a2", "u1"]);
     expect(folds(folded)[0]!.expanded).toBe(true);
   });
 
-  it("previews the opening prompt when the turn has no reply yet", () => {
-    const folded = foldAgentTurns([agent("g1", "\n  Please file this\nmore"), human("u1")], NONE);
+  it("previews the opening prompt when an automation turn has no reply yet", () => {
+    const folded = foldAgentTurns(
+      [automation("j1", "\n  Please file this\nmore"), human("u1")],
+      NONE,
+    );
     expect(folds(folded)[0]!.preview).toBe("Please file this");
   });
 
@@ -216,7 +232,7 @@ describe("foldAgentTurns", () => {
 
     it("only an earlier turn is running elsewhere", () => {
       // isWorking applies to the newest turn only.
-      const rows = [agent("g1"), reply("a1", "x"), human("u1")];
+      const rows = [agent("g1"), reply("a1", "FYI: x"), human("u1")];
       expect(fold(rows, { ...NONE, isWorking: true })).toHaveLength(1);
     });
 
@@ -245,8 +261,8 @@ describe("foldAgentTurns", () => {
       expect(
         fold([agent("g1"), approval], { ...NONE, pendingApprovalRequestIds: new Set(["req-1"]) }),
       ).toEqual([]);
-      // An answered approval no longer holds the turn open.
-      expect(fold([agent("g1"), approval, human("u1")])).toHaveLength(1);
+      // An answered approval no longer holds a routine turn open.
+      expect(fold([agent("g1"), approval, reply("a1", "FYI: done"), human("u1")])).toHaveLength(1);
       expect(
         fold([agent("g1"), event("q1", { type: "user_input_request", status: "waiting" })]),
       ).toEqual([]);
@@ -296,6 +312,15 @@ describe("foldAgentTurns", () => {
           reply("a1", "see file", { attachments: [{ type: "image", id: "i1", name: "a.png" }] }),
         ]),
       ).toEqual([]);
+      expect(
+        fold([
+          automation("j1"),
+          reply("a1", "Snapshot:\n![Upsell](/tmp/upsell.png)\nSay go when ready."),
+        ]),
+      ).toEqual([]);
+      expect(
+        fold([agent("g1"), reply("a1", "🤖 FYI: built it ![shot](/tmp/p24.png)"), human("u1")]),
+      ).toEqual([]);
     });
 
     it("a scheduled job is set to always deliver", () => {
@@ -336,12 +361,12 @@ describe("foldAgentTurns", () => {
       expect(fold([agent("g1"), reply("a1", "🤖 FYI: renew now or wait?")])).toEqual([]);
     });
 
-    it("it is the newest handoff from another bot and not marked routine", () => {
+    it("it is an agent handoff not marked routine, even after newer turns follow", () => {
       const handoff = reply("a1", "Arlo finished the import. 12 movies added, 2 need subtitles.");
       expect(fold([agent("g1"), handoff])).toEqual([]);
-      // The same turn folds once newer conversation follows it.
-      expect(fold([agent("g1"), handoff, human("u1"), reply("a2", "ok")])).toHaveLength(1);
-      // A newest handoff with no reply yet stays open too.
+      // Stays open even once newer conversation follows it (fail-open).
+      expect(fold([agent("g1"), handoff, human("u1"), reply("a2", "ok")])).toEqual([]);
+      // A handoff with no reply yet stays open too.
       expect(fold([agent("g1", "Here is the import report.")])).toEqual([]);
     });
   });
@@ -374,7 +399,7 @@ describe("foldAgentTurns", () => {
   it("keeps routine neighbours folded around a turn that stays open", () => {
     const rows = [
       agent("g1"),
-      reply("a1", "x"),
+      reply("a1", "FYI: x"),
       agent("g2"),
       reply("a2", "👉 Needs you"),
       agent("g3"),
@@ -386,6 +411,16 @@ describe("foldAgentTurns", () => {
       "a2",
       agentTurnFoldId("g3"),
     ]);
+  });
+});
+
+describe("hasMarkdownImage", () => {
+  it("matches embedded Markdown images outside code blocks", () => {
+    expect(hasMarkdownImage("Look:\n![Upsell](/tmp/upsell.png)")).toBe(true);
+    expect(hasMarkdownImage("![](https://example.com/a.webp)")).toBe(true);
+    expect(hasMarkdownImage("See `![not-an-image](/tmp/a.png)` inline")).toBe(false);
+    expect(hasMarkdownImage("```md\n![code](/tmp/a.png)\n```")).toBe(false);
+    expect(hasMarkdownImage("Just [a link](/tmp/a.png)")).toBe(false);
   });
 });
 

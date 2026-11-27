@@ -86,7 +86,7 @@ const ENTRIES: ReadonlyArray<Entry> = [
   message("u1", "What is left for today?"),
   message("a1", "Two errands.", { role: "assistant" }),
   message("g1", "Receipt for the Costco run attached.", fromAgent),
-  message("a2", "Filed the Costco receipt.", { role: "assistant" }),
+  message("a2", "🤖 FYI: Filed the Costco receipt.", { role: "assistant" }),
   message("j1", "Run the nightly backup.", {
     createdBy: "user",
     scheduledTaskId: ScheduledTaskId.make("task-backup"),

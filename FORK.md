@@ -28,10 +28,10 @@ keeps your sign-in, settings and threads.
      only) and whether the app opens on the Board. The bot board is bot-desk `board.py`'s
      output: its web address (e.g. `https://host:8447/`) or its folder on this Mac (e.g.
      `~/dev/bot/.board`). The desktop app reads `data.json` there, or the data `index.html` embeds.
-     "Collapse routine bot updates" (on by default) folds finished agent-to-agent and scheduled
-     turns into one "Bot activity" strip; running, failed, waiting and 👉 turns stay open, as
-     does any reply with a question (a `?` outside code and links) and the newest handoff from
-     another bot unless its reply starts with 🤖 or `FYI:` or only says there is nothing new.
+     "Collapse routine bot updates" (on by default) folds routine agent-to-agent turns (replies
+     starting with 🤖 or `FYI:`, or short "nothing new" acks) and non-`Always` scheduled check-ins
+     into one "Bot activity" strip; running, failed, waiting, 👉/⚠️, `?`, embedded Markdown image,
+     visual and substantive agent handoff turns stay open at any position.
      "Bot / Background drawer" (on by default) folds bots' background lanes you never wrote in
      (delegated, subagent, workflow or worktree threads and `· scheduled jobs` threads; no 👉
      title, nothing waiting on you, no failed run) into a collapsible Bot / Background shelf
@@ -136,3 +136,4 @@ reinstalls the current release.
 | Hide the Space strip with one Space; New Space in ••• | none (fork-only)           | the Spaces patch is dropped            |
 | Running threads pill in the footer, by machine        | none (fork-only)           | upstream shows running threads         |
 | Native in-app image preview from Board items          | none (fork-only)           | the Board patch is dropped             |
+| Only fold explicitly routine bot turns & keep images  | none (fork-only)           | the folding patch is dropped           |

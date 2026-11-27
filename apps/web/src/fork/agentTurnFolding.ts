@@ -243,10 +243,16 @@ export function flagsUser(text: string): boolean {
 const FENCED_CODE = /```[\s\S]*?(?:```|$)/g;
 const INLINE_CODE = /`[^`\n]*`/g;
 const LINK = /https?:\/\/\S+/g;
+const MARKDOWN_IMAGE = /!\[[^\]]*\]\([^)\s][^)]*\)/;
 
 /** A `?` in the reply's prose, outside code and links, is a question for the user. */
 export function asksUserQuestion(text: string): boolean {
   return text.replace(FENCED_CODE, "").replace(INLINE_CODE, "").replace(LINK, "").includes("?");
+}
+
+/** An embedded Markdown image (`![alt](path-or-url)`) outside code blocks is visual content. */
+export function hasMarkdownImage(text: string): boolean {
+  return MARKDOWN_IMAGE.test(text.replace(FENCED_CODE, "").replace(INLINE_CODE, ""));
 }
 
 const ROUTINE_MARKER = /^(?:🤖|fyi:)/iu;
@@ -267,7 +273,7 @@ function assistantTexts(turn: TimelineTurn): ReadonlyArray<string> {
   );
 }
 
-/** Inline visuals, messages sent to the user, and media or file attachments are never routine. */
+/** Inline visuals, embedded Markdown images, messages sent to the user, and attachments are never routine. */
 function hasVisualContent(turn: TimelineTurn): boolean {
   return turn.rows.some(
     (row) =>
@@ -277,7 +283,7 @@ function hasVisualContent(turn: TimelineTurn): boolean {
       row.kind === "sent-message" ||
       (row.kind === "message" &&
         row.message.role === "assistant" &&
-        (row.message.attachments?.length ?? 0) > 0),
+        ((row.message.attachments?.length ?? 0) > 0 || hasMarkdownImage(row.message.text))),
   );
 }
 
@@ -316,8 +322,9 @@ function isRoutineAgentTurn(
   if (hasVisualContent(turn)) return false;
   const replies = assistantTexts(turn);
   if (replies.some((text) => flagsUser(text) || asksUserQuestion(text))) return false;
-  // The newest handoff from another bot stays open unless its reply says it is routine.
-  if (isLast && sender.kind === "agent") {
+  // Fail open for agent-to-agent turns at any position: only fold when the reply explicitly marks
+  // itself routine (`🤖`, `FYI:`, or a zero-signal ack). Scheduled check-ins still fold by default.
+  if (sender.kind === "agent") {
     const latestReply = replies.at(-1);
     if (latestReply === undefined || !isExplicitRoutineReply(latestReply)) return false;
   }

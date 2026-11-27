@@ -46,7 +46,7 @@ export function useForkSidebarHierarchy<
   routeThreadKey: string | null,
   shownAboveThreadKeys: ReadonlySet<string>,
 ): P & { readonly forkHierarchy: ForkSidebarHierarchy<T> } {
-  const { sidebarHierarchyEnabled } = useForkSettings();
+  const { sidebarHierarchyEnabled, threadPlacementOverrides } = useForkSettings();
   const [lens] = useSidebarLens();
   const [botExpanded, setBotExpanded] = useLocalStorage(
     SIDEBAR_BOT_EXPANDED_KEY,
@@ -59,6 +59,7 @@ export function useForkSidebarHierarchy<
       lens,
       botExpanded,
       routeThreadKey,
+      placementOverrides: threadPlacementOverrides,
     }),
     shownAboveThreadKeys,
   );

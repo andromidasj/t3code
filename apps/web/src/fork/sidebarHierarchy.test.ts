@@ -22,6 +22,7 @@ import {
   splitBotDrawerRows,
   threadNeedsMe,
   toggledPresetScope,
+  toggleThreadPlacementOverride,
   withBotDrawerMarker,
   withoutBotRows,
   type SidebarHierarchyThread,
@@ -172,6 +173,81 @@ describe("classification", () => {
     ).toBe(false);
     expect(threadNeedsMe(thread("done", { ...digest, title: "✅ Inbox digest read" }))).toBe(false);
     expect(threadNeedsMe(thread("mine", { ...digest, createdBy: "user" }))).toBe(false);
+  });
+});
+
+describe("placement overrides", () => {
+  const lane = thread("lane", { lane: true, run: "completed" });
+  const mine = thread("mine", { createdBy: "user", run: "completed" });
+  const digest = thread("digest", { title: "Chief · inbox digest", run: "completed" });
+  const key = (entry: Thread) => sidebarThreadKey(entry);
+
+  it("keeps a delegated lane in the main sidebar when forced to main", () => {
+    expect(isBackgroundBotThread(lane, { [key(lane)]: "main" })).toBe(false);
+    expect(isHumanThread(lane, { [key(lane)]: "main" })).toBe(true);
+  });
+
+  it("moves a thread the user started, or a bot's report, to Bot / Background when forced", () => {
+    expect(isBackgroundBotThread(mine, { [key(mine)]: "background" })).toBe(true);
+    expect(isBackgroundBotThread(digest, { [key(digest)]: "background" })).toBe(true);
+    expect(isBackgroundBotThread(mine)).toBe(false);
+  });
+
+  it("never hides a thread that waits on the user or failed, whatever the override", () => {
+    for (const waiting of [
+      thread("approval", { hasPendingApprovals: true }),
+      thread("input", { hasPendingUserInput: true }),
+      thread("plan", { hasActionableProposedPlan: true }),
+      thread("failed", { run: "failed" }),
+      thread("pointer", { title: "👉 Pick" }),
+    ]) {
+      expect(isBackgroundBotThread(waiting, { [key(waiting)]: "background" })).toBe(false);
+    }
+  });
+
+  it("ignores overrides for other threads", () => {
+    expect(isBackgroundBotThread(lane, { [key(mine)]: "main" })).toBe(true);
+  });
+
+  it("leaves a forced-background report out of Needs me", () => {
+    expect(threadNeedsMe(digest)).toBe(true);
+    expect(threadNeedsMe(digest, { [key(digest)]: "background" })).toBe(false);
+    expect(threadNeedsMe(digest, { [key(digest)]: "main" })).toBe(true);
+  });
+
+  it("sets an override only when it differs from the automatic placement", () => {
+    expect(toggleThreadPlacementOverride({}, lane, "main")).toEqual({ [key(lane)]: "main" });
+    expect(toggleThreadPlacementOverride({}, mine, "background")).toEqual({
+      [key(mine)]: "background",
+    });
+    expect(toggleThreadPlacementOverride({}, lane, "background")).toEqual({});
+    expect(toggleThreadPlacementOverride({}, mine, "main")).toEqual({});
+  });
+
+  it("clears the override when the thread returns to its automatic placement", () => {
+    const other = { [key(mine)]: "background" as const };
+    expect(
+      toggleThreadPlacementOverride({ [key(lane)]: "main", ...other }, lane, "background"),
+    ).toEqual(other);
+    expect(toggleThreadPlacementOverride({ [key(mine)]: "background" }, mine, "main")).toEqual({});
+  });
+
+  it("moves overridden threads between the list and the drawer", () => {
+    const result = applySidebarHierarchy(partition({ activeThreads: [lane, mine, digest] }), {
+      ...options,
+      botExpanded: true,
+      placementOverrides: { [key(lane)]: "main", [key(mine)]: "background" },
+    });
+    expect(ids(result.activeThreads)).toEqual(["lane", "digest", "mine"]);
+    expect(ids(result.forkHierarchy.drawer?.threads ?? [])).toEqual(["mine"]);
+  });
+
+  it("drops a forced-background report from the Needs me count", () => {
+    const view = applySidebarHierarchy(partition({ activeThreads: [digest] }), {
+      ...options,
+      placementOverrides: { [key(digest)]: "background" },
+    }).forkHierarchy;
+    expect(view.needsMeCount).toBe(0);
   });
 });
 

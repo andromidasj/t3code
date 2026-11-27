@@ -328,6 +328,7 @@ describe("fork settings storage", () => {
       collapseAgentTurns: true,
       sidebarHierarchyEnabled: true,
       sidebarFilterPresets: [],
+      threadPlacementOverrides: {},
       botDockEnabled: true,
       spacesEnabled: true,
       spaces: [],

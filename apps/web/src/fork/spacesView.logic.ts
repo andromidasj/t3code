@@ -4,6 +4,7 @@ import type { ScopedProjectRef } from "@t3tools/contracts";
 import { hasUnseenCompletion, resolveThreadLastVisitedAt } from "~/components/Sidebar.logic";
 import type { SidebarProjectSnapshot } from "~/sidebarProjectGrouping";
 
+import type { ThreadPlacementOverrides } from "./forkSettings";
 import { isLiveThread } from "./botDock.logic";
 import {
   isHumanThread,
@@ -139,6 +140,7 @@ export function buildSpacesView<T extends SpacesThread, G extends SpacesGroup>(i
   readonly lens: SidebarFilterLens | null;
   readonly now: string;
   readonly localLastVisitedAt: Readonly<Record<string, string>>;
+  readonly placementOverrides?: ThreadPlacementOverrides;
 }): SpacesView<T, G> {
   const resolved = resolveSpaces(input.state);
   const projects = indexSpaceProjects(resolved, input.groups);
@@ -177,8 +179,8 @@ export function buildSpacesView<T extends SpacesThread, G extends SpacesGroup>(i
   const lanesRunning = new Set<string>();
   for (const [key, thread] of lineage) {
     if (!isLiveThread(thread, input.now)) continue;
-    const needs = threadNeedsMe(thread);
-    const unread = isHumanThread(thread) && isUnread(thread);
+    const needs = threadNeedsMe(thread, input.placementOverrides);
+    const unread = isHumanThread(thread, input.placementOverrides) && isUnread(thread);
     for (const spaceId of spaceIdsByThreadKey.get(key) ?? []) {
       const count = counts.get(spaceId)!;
       if (needs) count.needs += 1;
@@ -225,7 +227,7 @@ export function buildSpacesView<T extends SpacesThread, G extends SpacesGroup>(i
         ? group.displayName
         : conciseThreadLabel(thread.title);
     const status: SpaceTileStatus =
-      threadNeedsMe(thread) || lanesNeedMe.has(key)
+      threadNeedsMe(thread, input.placementOverrides) || lanesNeedMe.has(key)
         ? "needs"
         : isThreadRunning(thread) || lanesRunning.has(key)
           ? "working"

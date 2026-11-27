@@ -2,6 +2,7 @@ import appCss from "../index.css?inline";
 import {
   DEFAULT_CLIENT_SETTINGS,
   EnvironmentId,
+  type LocalApi,
   ProjectId,
   RunId,
   ThreadId,
@@ -13,6 +14,7 @@ import Sidebar from "~/components/Sidebar";
 import { SidebarProvider } from "~/components/ui/sidebar";
 import { useHandleNewThread } from "~/hooks/useHandleNewThread";
 import { __setClientSettingsForTests, getClientSettings } from "~/hooks/useSettings";
+import { readLocalApi } from "~/localApi";
 import { useProjects, useQuietThreadShells } from "~/state/entities";
 import { makeThreadFixture } from "~/test-fixtures";
 import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime/environment";
@@ -23,6 +25,7 @@ import { DEFAULT_FORK_SETTINGS, updateForkSettings } from "./forkSettings";
 
 vi.mock("../state/entities", { spy: true });
 vi.mock("../hooks/useHandleNewThread", { spy: true });
+vi.mock("../localApi", { spy: true });
 vi.mock("../components/sidebar/SidebarChrome", () => ({
   SidebarChromeHeader: () => null,
   SidebarChromeFooter: () => null,
@@ -159,6 +162,94 @@ describe("sidebar filter and Bot / Background drawer", () => {
     await userEvent.click(screen.getByRole("button", { name: "All", exact: true }));
     await expect.element(screen.getByText("My own thread")).toBeInTheDocument();
     await expect.element(screen.getByTestId("sidebar-bot-shelf-toggle")).toBeInTheDocument();
+  });
+
+  it("moves a single thread between the main sidebar and Bot / Background from its menu", async () => {
+    using stack = new DisposableStack();
+    const previousSettings = getClientSettings();
+    stack.defer(() => __setClientSettingsForTests(previousSettings));
+    __setClientSettingsForTests(DEFAULT_CLIENT_SETTINGS);
+    updateForkSettings({ sidebarHierarchyEnabled: true, sidebarFilterPresets: [] });
+    stack.defer(() => updateForkSettings(DEFAULT_FORK_SETTINGS));
+    stack.defer(() => localStorage.removeItem("t3code:fork:sidebar-lens"));
+    stack.defer(() => localStorage.removeItem("t3code:fork:sidebar-bot-expanded"));
+    vi.mocked(useProjects).mockReturnValue([project]);
+    vi.mocked(useQuietThreadShells).mockReturnValue(threads);
+    vi.mocked(useHandleNewThread).mockReturnValue({
+      activeDraftThread: null,
+      activeThread: null,
+      defaultProjectRef: null,
+      defaultProjectFallbackReady: true,
+      handleNewThread: vi.fn(),
+      routeDraftId: null,
+      routeThreadRef: null,
+    });
+    const show = vi.fn<(...args: unknown[]) => Promise<string | null>>(async () => null);
+    vi.mocked(readLocalApi).mockReturnValue({
+      contextMenu: { show, close: vi.fn() },
+    } as unknown as LocalApi);
+    stack.defer(() => vi.mocked(readLocalApi).mockRestore());
+    const row = (id: string) =>
+      document.querySelector<HTMLElement>(`[data-sidebar-row="${environmentId}:${id}"]`);
+    const rightClick = (element: Element) =>
+      element.dispatchEvent(
+        new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 10 }),
+      );
+    const placementLabel = () => {
+      const items = show.mock.calls.at(-1)![0] as Array<{ id: string; label: string }>;
+      return items.find((item) => item.id === "fork-thread-placement")?.label ?? null;
+    };
+
+    await using screen = await render(
+      <SidebarProvider>
+        <Sidebar routeReveal={{ observedKey: null, pendingKey: null }} />
+      </SidebarProvider>,
+    );
+    await expect.element(screen.getByText("My own thread")).toBeInTheDocument();
+    const drawerToggle = screen.getByTestId("sidebar-bot-shelf-toggle");
+    await vi.waitFor(() =>
+      expect(drawerToggle.element().textContent?.replace(/\s+/g, " ")).toMatch(
+        /^Bot \/ Background ?2$/,
+      ),
+    );
+
+    // A thread of the user's own goes to the drawer.
+    show.mockResolvedValueOnce("fork-thread-placement");
+    rightClick(row("mine")!);
+    await vi.waitFor(() => expect(placementLabel()).toBe("Move to Bot / Background"));
+    await vi.waitFor(() =>
+      expect(drawerToggle.element().textContent?.replace(/\s+/g, " ")).toMatch(
+        /^Bot \/ Background ?3$/,
+      ),
+    );
+    await vi.waitFor(() => expect(document.body.textContent).not.toContain("My own thread"));
+    expect(JSON.parse(localStorage.getItem("t3code:fork:settings:v1")!)).toMatchObject({
+      threadPlacementOverrides: { [`${environmentId}:mine`]: "background" },
+    });
+
+    // A bot lane in the drawer comes back to the main list.
+    (drawerToggle.element() as HTMLElement).click();
+    await expect.element(screen.getByText("Nightly scan")).toBeInTheDocument();
+    show.mockResolvedValueOnce("fork-thread-placement");
+    rightClick(row("nightly")!);
+    await vi.waitFor(() => expect(placementLabel()).toBe("Move to main sidebar"));
+    await vi.waitFor(() =>
+      expect(drawerToggle.element().textContent?.replace(/\s+/g, " ")).toMatch(
+        /^Bot \/ Background ?2$/,
+      ),
+    );
+    const header = document.querySelector('[data-testid="sidebar-bot-header"]')!;
+    const nightly = row("nightly")!;
+    expect(header.compareDocumentPosition(nightly) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+
+    // Moving the user's own thread back drops its override.
+    show.mockResolvedValueOnce("fork-thread-placement");
+    rightClick(row("mine")!);
+    await vi.waitFor(() => expect(placementLabel()).toBe("Move to main sidebar"));
+    await expect.element(screen.getByText("My own thread")).toBeInTheDocument();
+    expect(
+      JSON.parse(localStorage.getItem("t3code:fork:settings:v1")!).threadPlacementOverrides,
+    ).toEqual({ [`${environmentId}:nightly`]: "main" });
   });
 
   it("fits a narrow sidebar and keeps the drawer steady right above Settled", async () => {

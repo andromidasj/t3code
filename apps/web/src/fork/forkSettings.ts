@@ -22,6 +22,12 @@ export interface SidebarFilterPreset {
   readonly projectKeys: ReadonlyArray<string>;
 }
 
+/** Where the user put one thread by hand: the main list, or the Bot / Background drawer. */
+export type ThreadPlacement = "main" | "background";
+
+/** Placement exceptions by `environmentId:threadId` key; absent threads follow the automatic rule. */
+export type ThreadPlacementOverrides = Readonly<Record<string, ThreadPlacement>>;
+
 export interface ForkSettings {
   /** Mirrors the "board" entry of sidebarPages; it also gates the Board's shortcut and launch. */
   readonly boardEnabled: boolean;
@@ -35,6 +41,8 @@ export interface ForkSettings {
   /** The sidebar's All / Needs me filter and its Bot / Background drawer. */
   readonly sidebarHierarchyEnabled: boolean;
   readonly sidebarFilterPresets: ReadonlyArray<SidebarFilterPreset>;
+  /** Threads the user moved between the main list and Bot / Background by hand. */
+  readonly threadPlacementOverrides: ThreadPlacementOverrides;
   /** Pinned projects as an avatar grid at the top of the sidebar. */
   readonly botDockEnabled: boolean;
   /** Arc-style Spaces: the sidebar shows one set of projects at a time, with a pinned grid each. */
@@ -61,6 +69,7 @@ export const DEFAULT_FORK_SETTINGS: ForkSettings = {
   collapseAgentTurns: true,
   sidebarHierarchyEnabled: true,
   sidebarFilterPresets: [],
+  threadPlacementOverrides: {},
   botDockEnabled: true,
   spacesEnabled: true,
   spaces: [],
@@ -185,6 +194,16 @@ export function normalizeSidebarFilterPresets(raw: unknown): ReadonlyArray<Sideb
   return presets;
 }
 
+/** Stored overrides whose values are `"main"` or `"background"`; anything else is dropped. */
+export function normalizeThreadPlacementOverrides(raw: unknown): ThreadPlacementOverrides {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return {};
+  const overrides: Record<string, ThreadPlacement> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (key !== "" && (value === "main" || value === "background")) overrides[key] = value;
+  }
+  return overrides;
+}
+
 function parseForkSettings(raw: string | null): ForkSettings {
   if (raw === null) return DEFAULT_FORK_SETTINGS;
   let parsed: unknown;
@@ -219,6 +238,7 @@ function parseForkSettings(raw: string | null): ForkSettings {
         ? record.sidebarHierarchyEnabled
         : DEFAULT_FORK_SETTINGS.sidebarHierarchyEnabled,
     sidebarFilterPresets: normalizeSidebarFilterPresets(record.sidebarFilterPresets),
+    threadPlacementOverrides: normalizeThreadPlacementOverrides(record.threadPlacementOverrides),
     botDockEnabled:
       typeof record.botDockEnabled === "boolean"
         ? record.botDockEnabled

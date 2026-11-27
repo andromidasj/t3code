@@ -15,6 +15,7 @@ import {
 } from "~/components/Sidebar.logic";
 import type { SidebarProjectSnapshot } from "~/sidebarProjectGrouping";
 
+import type { ThreadPlacementOverrides } from "./forkSettings";
 import {
   isHumanThread,
   isThreadRunning,
@@ -104,6 +105,7 @@ export function buildBotDock<T extends BotDockThread, G extends BotDockGroup>(in
   readonly lens: SidebarFilterLens | null;
   readonly now: string;
   readonly localLastVisitedAt: Readonly<Record<string, string>>;
+  readonly placementOverrides?: ThreadPlacementOverrides;
 }): BotDockModel<T, G> {
   const groups = botDockGroups(input.groups);
   if (groups.length === 0) return emptyBotDock();
@@ -148,10 +150,14 @@ export function buildBotDock<T extends BotDockThread, G extends BotDockGroup>(in
     );
     const rolled =
       mainThread === undefined || live.includes(mainThread) ? live : [mainThread, ...live];
-    const yours = rolled.filter((thread) => thread === mainThread || isHumanThread(thread));
+    const yours = rolled.filter(
+      (thread) => thread === mainThread || isHumanThread(thread, input.placementOverrides),
+    );
     const featuredThread = mainThread ?? yours[0] ?? live[0] ?? null;
     if (mainThread !== undefined) mainThreadKeys.add(sidebarThreadKey(mainThread));
-    const status: BotDockStatus = rolled.some(threadNeedsMe)
+    const status: BotDockStatus = rolled.some((thread) =>
+      threadNeedsMe(thread, input.placementOverrides),
+    )
       ? "needs"
       : rolled.some(isThreadRunning)
         ? "working"

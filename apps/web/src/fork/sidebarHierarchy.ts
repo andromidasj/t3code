@@ -3,7 +3,11 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell
 
 import type { SidebarListItem } from "~/components/Sidebar.logic";
 
-import type { SidebarFilterPreset } from "./forkSettings";
+import type {
+  SidebarFilterPreset,
+  ThreadPlacement,
+  ThreadPlacementOverrides,
+} from "./forkSettings";
 
 /**
  * The sidebar's quick filter. `all` lists the user's threads and folds bots' background lanes into
@@ -82,36 +86,76 @@ function isBackgroundLane(thread: SidebarHierarchyThread): boolean {
 
 /**
  * What the Bot / Background drawer holds: a bot's background lane the user never wrote in, with
- * nothing waiting on them and no failed run.
+ * nothing waiting on them and no failed run. A per-thread placement override (right-click: Move
+ * to main sidebar / Move to Bot / Background) beats the lane rule, but a thread that waits on the
+ * user or failed never hides in the drawer.
  */
-export function isBackgroundBotThread(thread: SidebarHierarchyThread): boolean {
+export function isBackgroundBotThread(
+  thread: SidebarHierarchyThread,
+  placementOverrides?: ThreadPlacementOverrides,
+): boolean {
+  const override = placementOverrides?.[sidebarThreadKey(thread)];
+  if (override === "main") return false;
+  if (override === "background") return !needsAttention(thread);
+  return isBotOpened(thread) && !needsAttention(thread) && isBackgroundLane(thread);
+}
+
+/** Something waits on the user, the title points at them (👉) or the last run failed. */
+function needsAttention(thread: SidebarHierarchyThread): boolean {
   return (
-    isBotOpened(thread) &&
-    !isWaitingOnUser(thread) &&
-    !isPointedAtUser(thread) &&
-    thread.latestRun?.status !== "failed" &&
-    isBackgroundLane(thread)
+    isWaitingOnUser(thread) || isPointedAtUser(thread) || thread.latestRun?.status === "failed"
   );
+}
+
+/** Where the thread lands without an override. */
+function autoThreadPlacement(thread: SidebarHierarchyThread): ThreadPlacement {
+  return isBackgroundBotThread(thread) ? "background" : "main";
+}
+
+/**
+ * The overrides after the user moves `thread` to `target`. A move back to where the automatic
+ * rule already puts the thread drops its entry, so the map holds only real exceptions.
+ */
+export function toggleThreadPlacementOverride(
+  overrides: ThreadPlacementOverrides,
+  thread: SidebarHierarchyThread,
+  target: ThreadPlacement,
+): ThreadPlacementOverrides {
+  const key = sidebarThreadKey(thread);
+  if (autoThreadPlacement(thread) === target) {
+    if (!(key in overrides)) return overrides;
+    const { [key]: _dropped, ...rest } = overrides;
+    return rest;
+  }
+  return overrides[key] === target ? overrides : { ...overrides, [key]: target };
 }
 
 /**
  * Listed in the sidebar itself: everything but background lanes, so a report a bot opened on its
  * own (`Chief · inbox digest · Nov 26`) stays in view.
  */
-export function isHumanThread(thread: SidebarHierarchyThread): boolean {
-  return !isBackgroundBotThread(thread);
+export function isHumanThread(
+  thread: SidebarHierarchyThread,
+  placementOverrides?: ThreadPlacementOverrides,
+): boolean {
+  return !isBackgroundBotThread(thread, placementOverrides);
 }
 
 /**
  * What the Needs me filter lists: waiting on the user, opened for them (👉), its last run failed,
  * or a report a bot opened outside its lanes that the user has not answered or marked ✅ done.
+ * A thread moved to Bot / Background is no longer such a report.
  */
-export function threadNeedsMe(thread: SidebarHierarchyThread): boolean {
+export function threadNeedsMe(
+  thread: SidebarHierarchyThread,
+  placementOverrides?: ThreadPlacementOverrides,
+): boolean {
   return (
-    isWaitingOnUser(thread) ||
-    isPointedAtUser(thread) ||
-    thread.latestRun?.status === "failed" ||
-    (isBotOpened(thread) && !isBackgroundLane(thread) && !thread.title.trim().startsWith("✅"))
+    needsAttention(thread) ||
+    (isBotOpened(thread) &&
+      !isBackgroundLane(thread) &&
+      !thread.title.trim().startsWith("✅") &&
+      placementOverrides?.[sidebarThreadKey(thread)] !== "background")
   );
 }
 
@@ -178,19 +222,22 @@ export function applySidebarHierarchy<
     readonly lens: SidebarFilterLens;
     readonly botExpanded: boolean;
     readonly routeThreadKey: string | null;
+    readonly placementOverrides?: ThreadPlacementOverrides;
   },
 ): P & { readonly forkHierarchy: SidebarHierarchyView<T> } {
   if (!options.enabled) {
     return { ...partition, forkHierarchy: disabledSidebarHierarchy<T>() };
   }
-  const { lens, routeThreadKey } = options;
+  const { lens, routeThreadKey, placementOverrides } = options;
+  const needsMe = (thread: T) => threadNeedsMe(thread, placementOverrides);
+  const isHuman = (thread: T) => isHumanThread(thread, placementOverrides);
   const isRoute = (thread: T) =>
     routeThreadKey !== null && sidebarThreadKey(thread) === routeThreadKey;
   const needsMeCount = [
     ...partition.pinnedThreads,
     ...partition.activeThreads,
     ...partition.workingThreads,
-  ].filter(threadNeedsMe).length;
+  ].filter(needsMe).length;
   const hidden: T[] = [];
   const keep = (threads: readonly T[], test: (thread: T) => boolean): T[] => {
     const kept: T[] = [];
@@ -201,12 +248,12 @@ export function applySidebarHierarchy<
   if (lens === "needs-me") {
     // One flat list: a match on the Working shelf would sit behind its closed header.
     const workingThreads = keep(partition.workingThreads, () => false);
-    const workingMatches = hidden.filter(threadNeedsMe);
-    hidden.splice(0, hidden.length, ...hidden.filter((thread) => !threadNeedsMe(thread)));
+    const workingMatches = hidden.filter(needsMe);
+    hidden.splice(0, hidden.length, ...hidden.filter((thread) => !needsMe(thread)));
     return {
       ...partition,
-      pinnedThreads: keep(partition.pinnedThreads, threadNeedsMe),
-      activeThreads: [...workingMatches, ...keep(partition.activeThreads, threadNeedsMe)],
+      pinnedThreads: keep(partition.pinnedThreads, needsMe),
+      activeThreads: [...workingMatches, ...keep(partition.activeThreads, needsMe)],
       workingThreads,
       snoozedThreads: keep(partition.snoozedThreads, () => false),
       settledThreads: keep(partition.settledThreads, () => false),
@@ -220,11 +267,11 @@ export function applySidebarHierarchy<
     };
   }
 
-  const humanActive = partition.activeThreads.filter(isHumanThread);
-  const humanWorking = partition.workingThreads.filter(isHumanThread);
+  const humanActive = partition.activeThreads.filter(isHuman);
+  const humanWorking = partition.workingThreads.filter(isHuman);
   const bots = [
-    ...partition.workingThreads.filter((thread) => !isHumanThread(thread)),
-    ...partition.activeThreads.filter((thread) => !isHumanThread(thread)),
+    ...partition.workingThreads.filter((thread) => !isHuman(thread)),
+    ...partition.activeThreads.filter((thread) => !isHuman(thread)),
   ];
   const showDrawer = bots.length > 0;
   const listedBots = keep(bots, () => showDrawer && options.botExpanded);

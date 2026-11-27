@@ -40,7 +40,8 @@ export function useBotDock(input: {
   readonly routeThreadKey: string | null;
   readonly projectScopeKeys: ReadonlyArray<string>;
 }): BotDockModel<DockThread, DockGroup> {
-  const { botDockEnabled, sidebarHierarchyEnabled, spacesEnabled } = useForkSettings();
+  const { botDockEnabled, sidebarHierarchyEnabled, spacesEnabled, threadPlacementOverrides } =
+    useForkSettings();
   const [lens] = useSidebarLens();
   // `YYYY-MM-DDTHH:mm` in UTC; the dock only needs snooze wakes to the minute.
   const nowMinute = useNowMinute();
@@ -52,6 +53,7 @@ export function useBotDock(input: {
     lens: sidebarHierarchyEnabled ? lens : null,
     now: `${nowMinute}:00.000Z`,
     localLastVisitedAt,
+    placementOverrides: threadPlacementOverrides,
   });
 }
 
@@ -381,11 +383,12 @@ function BotDockTooltip(props: {
 }) {
   const gt = useGT();
   const { tile } = props;
+  const { threadPlacementOverrides } = useForkSettings();
   const thread = tile.featuredThread;
   const threadStatus =
     thread === null
       ? null
-      : threadNeedsMe(thread)
+      : threadNeedsMe(thread, threadPlacementOverrides)
         ? gt("Needs you", { $context: "bot dock status" })
         : isThreadRunning(thread)
           ? gt("Working", { $context: "bot dock status" })

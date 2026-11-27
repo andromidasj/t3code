@@ -39,6 +39,11 @@ import {
   type SidebarSpacesState,
 } from "./spaces.logic";
 import { buildSpacesView, type SpacesView } from "./spacesView.logic";
+import {
+  withThreadPlacementItem,
+  type ThreadPlacementMenuInput,
+  type ThreadPlacementMenuId,
+} from "./threadPlacementMenu";
 import { useSidebarLens } from "./useSidebarHierarchy";
 
 export type SpacesThread = EnvironmentThreadShell;
@@ -72,7 +77,10 @@ export interface ForkSidebarSpaces {
   readonly toggleGrid: (threadKey: string) => void;
   readonly editorOpen: boolean;
   readonly setEditorOpen: (open: boolean) => void;
-  /** The thread menu, with Pin to top grid added and the project filter left out. */
+  /**
+   * The thread menu, with Move to main sidebar / Bot / Background and Pin to top grid added and
+   * the project filter left out when Spaces are on.
+   */
   readonly threadMenu: (
     api: LocalApi,
     threadKey: string,
@@ -81,7 +89,8 @@ export interface ForkSidebarSpaces {
       items: readonly ContextMenuItem<T>[],
       position: { x: number; y: number },
       source: ContextMenuSource,
-    ) => Promise<T | typeof GRID_MENU_ID | null>;
+      placement: ThreadPlacementMenuInput,
+    ) => Promise<T | typeof GRID_MENU_ID | ThreadPlacementMenuId | null>;
   };
   /** Starts the toolbar's new thread in the Space's projects; false leaves it to upstream. */
   readonly newThread: (input: {
@@ -161,6 +170,7 @@ export function useSidebarSpaces(input: {
         lens: settings.sidebarHierarchyEnabled ? lens : null,
         now: `${nowMinute}:00.000Z`,
         localLastVisitedAt,
+        placementOverrides: settings.threadPlacementOverrides,
       })
     : null;
   const routeSpaceId = view?.routeSpaceId ?? null;
@@ -258,7 +268,11 @@ export function useSidebarSpaces(input: {
     editorOpen: enabled && editorOpen,
     setEditorOpen,
     threadMenu: (api, threadKey) => ({
-      show: (items, position, source) => {
+      show: (baseItems, position, source, placement) => {
+        const items = withThreadPlacementItem(baseItems, placement, {
+          toMain: gt("Move to main sidebar"),
+          toBackground: gt("Move to Bot / Background"),
+        });
         if (shownSpace === null) return api.contextMenu.show(items, position, source);
         const inGrid = shownSpace.gridThreadKeys.includes(threadKey);
         return api.contextMenu.show<(typeof items)[number]["id"] | typeof GRID_MENU_ID>(

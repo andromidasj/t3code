@@ -279,6 +279,7 @@ import { useForkLineageScope, useForkSidebarHierarchy } from "~/fork/useSidebarH
 import { SpaceFrame } from "~/fork/SpaceFrame";
 import { SpaceHeader } from "~/fork/SpaceHeader";
 import { SpaceSwitcherStrip } from "~/fork/SpaceSwitcherStrip";
+import { applyThreadPlacement, isThreadPlacementMenuId } from "~/fork/threadPlacementMenu";
 import { isSpaceGridMenuId, useSidebarSpaces } from "~/fork/useSidebarSpaces";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { TooltipScrollDismissArea } from "./ui/tooltip";
@@ -2842,11 +2843,24 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             }),
             position,
             source,
+            {
+              thread,
+              eligible:
+                forkHierarchy.lens !== null &&
+                !isSettled &&
+                !isSnoozed &&
+                !isPinned &&
+                !forkSpaces.gridThreadKeys.has(threadKey),
+            },
           ),
         );
         if (clicked._tag === "Failure" || clicked.value === null) return;
         if (isSpaceGridMenuId(clicked.value)) {
           forkSpaces.toggleGrid(threadKey);
+          return;
+        }
+        if (isThreadPlacementMenuId(clicked.value)) {
+          applyThreadPlacement(thread);
           return;
         }
         if (

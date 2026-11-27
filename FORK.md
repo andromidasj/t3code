@@ -37,7 +37,9 @@ keeps your sign-in, settings and threads.
      workflow or worktree threads and `· scheduled jobs` threads; no 👉 title, nothing waiting
      on you, no failed run) into a collapsible Bot / Background shelf above Snoozed and Settled.
      A thread a bot opened on its own, such as a digest, stays in the list and counts under
-     Needs me until you reply or give it a ✅ title. Shift-,
+     Needs me until you reply or give it a ✅ title. Right-click a thread in the list: "Move to
+     Bot / Background" or "Move to main sidebar" overrides that rule for the one thread (kept on
+     this Mac; a thread waiting on you or failed never hides). Shift-,
      ⌘- or Ctrl-click in the sidebar's project menu picks several projects; with projects
      picked, "Save view" keeps that set as a chip; rename or delete views here. A project scope
      (menu, view or dock) also lists threads delegated or spawned from its threads, across
@@ -124,3 +126,4 @@ reinstalls the current release.
 | `@` project mentions as one chip with their icon   | none (fork-only)           | the `@` mentions patch is dropped      |
 | Setting to turn off swipe back/forward             | none (fork-only)           | upstream makes the swipe optional      |
 | Bot / Background holds only bot lanes              | none (fork-only)           | the sidebar filter patch is dropped    |
+| Per-thread Bot / Background placement override     | none (fork-only)           | the sidebar filter patch is dropped    |

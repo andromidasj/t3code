@@ -1,5 +1,5 @@
 import { T, useGT } from "gt-react";
-import { ArrowDownIcon, ArrowUpIcon, XIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowUpIcon, PlusIcon, XIcon } from "lucide-react";
 
 import { SettingsRow, SettingsSection } from "~/components/settings/settingsLayout";
 import { Button } from "~/components/ui/button";
@@ -7,6 +7,7 @@ import { Input } from "~/components/ui/input";
 import { Switch } from "~/components/ui/switch";
 
 import {
+  addForkSpace,
   moveSidebarPage,
   normalizeBoardSource,
   setSidebarPageVisible,
@@ -16,6 +17,7 @@ import {
   type SidebarPage,
 } from "./forkSettings";
 import { removeSidebarFilterPreset, renameSidebarFilterPreset } from "./sidebarHierarchy";
+import { resolveSpaces } from "./spaces.logic";
 import { SIDEBAR_PAGE_ICONS, useSidebarPageLabels } from "./sidebarPages";
 
 /** Settings this fork adds, saved on this Mac only. Shown under Settings, Labs. */
@@ -24,6 +26,11 @@ export function ForkSettingsSection() {
   const settings = useForkSettings();
   const boardUrlInvalid =
     settings.boardUrl.trim() !== "" && normalizeBoardSource(settings.boardUrl) === null;
+  const spaceCount = resolveSpaces({
+    spaces: settings.spaces,
+    defaultSpaceId: settings.defaultSpaceId,
+    activeSpaceId: settings.activeSpaceId,
+  }).spaces.length;
   return (
     <SettingsSection id="fork-customizations" title={gt("Customizations")}>
       <SettingsRow
@@ -146,6 +153,31 @@ export function ForkSettingsSection() {
           />
         }
       />
+      {settings.spacesEnabled ? (
+        <SettingsRow
+          devicePreference
+          title={gt("Spaces")}
+          description={gt(
+            "The strip above Settings shows once there are two. You can also add one from ••• beside the Space's name.",
+          )}
+          control={
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground text-xs" data-testid="fork-space-count">
+                {gt("{count, plural, one {# space} other {# spaces}}", { count: spaceCount })}
+              </span>
+              <Button
+                size="xs"
+                variant="outline"
+                data-testid="fork-settings-add-space"
+                onClick={() => addForkSpace(gt("New Space"))}
+              >
+                <PlusIcon />
+                {gt("New Space")}
+              </Button>
+            </div>
+          }
+        />
+      ) : null}
       <SettingsRow
         devicePreference
         title={gt("Show projects & bots in @ mentions")}

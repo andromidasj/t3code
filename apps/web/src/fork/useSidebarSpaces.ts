@@ -29,10 +29,13 @@ import { useQuietThreadShells } from "~/state/entities";
 import { useThreadSelectionStore } from "~/threadSelectionStore";
 import { useUiStateStore } from "~/uiStateStore";
 
-import { readForkSettings, updateForkSettings, useForkSettings } from "./forkSettings";
 import {
-  createSpace,
-  nextSpaceLook,
+  addForkSpace,
+  readForkSettings,
+  updateForkSettings,
+  useForkSettings,
+} from "./forkSettings";
+import {
   resolveSpaceNewThreadProjectRef,
   setActiveSpace,
   setGridThread,
@@ -100,9 +103,6 @@ export interface ForkSidebarSpaces {
     readonly onGroup: (group: SpacesGroup) => void;
   }) => boolean;
 }
-
-// One person adds Spaces by hand on one Mac, so the time is unique enough.
-const newSpaceId = () => `space-${Date.now().toString(36)}`;
 
 /** The sidebar the Space tint paints behind, which the swipe listens on. */
 export const SPACE_FRAME_ATTRIBUTE = "data-fork-space-frame";
@@ -229,14 +229,12 @@ export function useSidebarSpaces(input: {
   };
   const addSpace = () => {
     if (view === null) return;
-    const look = nextSpaceLook(view.resolved.spaces);
-    const id = newSpaceId();
     completeSidebarRouteReveal(routeReveal);
     if (routeThreadKey !== null) followedRouteKeys.set(routeReveal, routeThreadKey);
     clearSelection();
     // Skip the slide when immediately opening the editor so its popover anchors cleanly to •••.
     pendingSlideRef.current = null;
-    save(createSpace(state, { id, name: gt("New Space"), ...look }));
+    addForkSpace(gt("New Space"));
     setEditorOpen(true);
   };
   const toggleGrid = (threadKey: string) => {

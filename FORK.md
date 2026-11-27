@@ -55,11 +55,12 @@ keeps your sign-in, settings and threads.
      "Arc-style Spaces sidebar" (on by default) shows one Space at a time: its own projects
      (each project is in exactly one; new and unassigned ones land in the default Space),
      the threads delegated from them, and a grid of threads you pinned there (right-click a
-     thread: Pin to top grid). Switch with the strip above Settings (amber dot: something
-     waits on you there; blue: unread), a two-finger sideways swipe, or Ctrl+1 to Ctrl+9.
-     Switching never changes the open chat; opening a thread from elsewhere shows its Space.
-     The ••• next to the Space's name edits its name, icon, tint and projects; + on the strip
-     adds a Space. ⌘1–9 jump to the grid's tiles first (holding ⌘ numbers them), then on down
+     thread: Pin to top grid). Switch with the strip above Settings (shown once there are two
+     Spaces; amber dot: something waits on you there; blue: unread), a two-finger sideways
+     swipe, or Ctrl+1 to Ctrl+9. Switching never changes the open chat; opening a thread from
+     elsewhere shows its Space. The ••• next to the Space's name edits its name, icon, tint and
+     projects and has New Space (so do the strip's + and Settings, Labs, Customizations).
+     ⌘1–9 jump to the grid's tiles first (holding ⌘ numbers them), then on down
      the list. While on, it replaces the project menu, saved views and the Bot Dock.
      Spaces are saved on this Mac only.
      "Show projects & bots in @ mentions" (on by default) lists projects (one per sidebar group,
@@ -103,29 +104,30 @@ reinstalls the current release.
 
 ## Patches
 
-| Patch                                              | Upstream                   | Drop when                              |
-| -------------------------------------------------- | -------------------------- | -------------------------------------- |
-| Restore macOS cursor auto-hide while typing        | reverts part of c2d44a312c | upstream hides the cursor while typing |
-| Bindable `chat.citeSelection` command              | PR #34656                  | that PR or an equivalent merges        |
-| "Open in new threads" setting for Thread details   | PR #25598                  | that PR or an equivalent merges        |
-| ⌘⌥←/→ switch to the next/previous right panel tab  | PR #34437                  | that PR or an equivalent merges        |
-| ⌘⌥1–9 jump to a right panel tab (9 = last)         | none (fork-only)           | upstream ships tab jump shortcuts      |
-| PR links open via any environment with the repo    | none (fork-only)           | upstream resolves links across envs    |
-| Board view (`/board`, ⌥⇧⌘B) and per-Mac settings   | none (fork-only)           | upstream ships a cross-thread board    |
-| Board shows bot-desk items, Today and details      | none (fork-only)           | the Board patch is dropped             |
-| Board right panel, sidebar pages, "Open in" desk   | none (fork-only)           | the Board patch is dropped             |
-| Collapse routine bot updates in threads            | none (fork-only)           | upstream folds agent-to-agent turns    |
-| Scheduled task delivery modes                      | none (fork-only)           | upstream ships per-task notify modes   |
-| Sidebar All/Needs me, Bot / Background             | none (fork-only)           | upstream separates bot threads         |
-| Scheduled jobs health on the Board (Jobs)          | none (fork-only)           | the Board patch is dropped             |
-| Bot Dock; project scope follows delegated threads  | none (fork-only)           | upstream ships a pinned-project dock   |
-| Arc-style Spaces sidebar with pinned thread grids  | none (fork-only)           | upstream ships sidebar spaces          |
-| Spaces swipe-back, strip pill and slide polish     | none (fork-only)           | the Spaces patch is dropped            |
-| Keep bot turns with questions or new handoffs open | none (fork-only)           | the folding patch is dropped           |
-| Projects & bots in `@` mentions; hide files        | none (fork-only)           | upstream mentions projects with `@`    |
-| Keep sidebar background native under Spaces        | none (fork-only)           | the Spaces patch is dropped            |
-| `@` project mentions as one chip with their icon   | none (fork-only)           | the `@` mentions patch is dropped      |
-| Setting to turn off swipe back/forward             | none (fork-only)           | upstream makes the swipe optional      |
-| Bot / Background holds only bot lanes              | none (fork-only)           | the sidebar filter patch is dropped    |
-| Per-thread Bot / Background placement override     | none (fork-only)           | the sidebar filter patch is dropped    |
-| ⌘1–9 start with the Space's Pinned Grid tiles      | none (fork-only)           | the Spaces patch is dropped            |
+| Patch                                                 | Upstream                   | Drop when                              |
+| ----------------------------------------------------- | -------------------------- | -------------------------------------- |
+| Restore macOS cursor auto-hide while typing           | reverts part of c2d44a312c | upstream hides the cursor while typing |
+| Bindable `chat.citeSelection` command                 | PR #34656                  | that PR or an equivalent merges        |
+| "Open in new threads" setting for Thread details      | PR #25598                  | that PR or an equivalent merges        |
+| ⌘⌥←/→ switch to the next/previous right panel tab     | PR #34437                  | that PR or an equivalent merges        |
+| ⌘⌥1–9 jump to a right panel tab (9 = last)            | none (fork-only)           | upstream ships tab jump shortcuts      |
+| PR links open via any environment with the repo       | none (fork-only)           | upstream resolves links across envs    |
+| Board view (`/board`, ⌥⇧⌘B) and per-Mac settings      | none (fork-only)           | upstream ships a cross-thread board    |
+| Board shows bot-desk items, Today and details         | none (fork-only)           | the Board patch is dropped             |
+| Board right panel, sidebar pages, "Open in" desk      | none (fork-only)           | the Board patch is dropped             |
+| Collapse routine bot updates in threads               | none (fork-only)           | upstream folds agent-to-agent turns    |
+| Scheduled task delivery modes                         | none (fork-only)           | upstream ships per-task notify modes   |
+| Sidebar All/Needs me, Bot / Background                | none (fork-only)           | upstream separates bot threads         |
+| Scheduled jobs health on the Board (Jobs)             | none (fork-only)           | the Board patch is dropped             |
+| Bot Dock; project scope follows delegated threads     | none (fork-only)           | upstream ships a pinned-project dock   |
+| Arc-style Spaces sidebar with pinned thread grids     | none (fork-only)           | upstream ships sidebar spaces          |
+| Spaces swipe-back, strip pill and slide polish        | none (fork-only)           | the Spaces patch is dropped            |
+| Keep bot turns with questions or new handoffs open    | none (fork-only)           | the folding patch is dropped           |
+| Projects & bots in `@` mentions; hide files           | none (fork-only)           | upstream mentions projects with `@`    |
+| Keep sidebar background native under Spaces           | none (fork-only)           | the Spaces patch is dropped            |
+| `@` project mentions as one chip with their icon      | none (fork-only)           | the `@` mentions patch is dropped      |
+| Setting to turn off swipe back/forward                | none (fork-only)           | upstream makes the swipe optional      |
+| Bot / Background holds only bot lanes                 | none (fork-only)           | the sidebar filter patch is dropped    |
+| Per-thread Bot / Background placement override        | none (fork-only)           | the sidebar filter patch is dropped    |
+| ⌘1–9 start with the Space's Pinned Grid tiles         | none (fork-only)           | the Spaces patch is dropped            |
+| Hide the Space strip with one Space; New Space in ••• | none (fork-only)           | the Spaces patch is dropped            |

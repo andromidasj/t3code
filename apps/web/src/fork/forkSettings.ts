@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-import { normalizeSidebarSpaces, type SidebarSpace } from "./spaces.logic";
+import { addNewSpace, normalizeSidebarSpaces, type SidebarSpace } from "./spaces.logic";
 
 /**
  * Fork-only preferences. They stay in this Mac's localStorage, never in server settings, so one
@@ -305,6 +305,28 @@ export function updateForkSettings(
   }
   for (const listener of listeners) listener();
   return next;
+}
+
+// One person adds Spaces by hand on one Mac, so the time is unique enough.
+const newSpaceId = () => `space-${Date.now().toString(36)}`;
+
+/** Adds a Space to this Mac's saved Spaces and makes it the shown one; returns its id. */
+export function addForkSpace(
+  name: string,
+  storage: ForkSettingsStorage | null = defaultStorage(),
+): string {
+  const { spaces, defaultSpaceId, activeSpaceId } = readForkSettings(storage);
+  const id = newSpaceId();
+  const next = addNewSpace({ spaces, defaultSpaceId, activeSpaceId }, { id, name });
+  updateForkSettings(
+    {
+      spaces: next.spaces,
+      defaultSpaceId: next.defaultSpaceId,
+      activeSpaceId: next.activeSpaceId,
+    },
+    storage,
+  );
+  return id;
 }
 
 // useSyncExternalStore needs the same object back until the stored text changes.

@@ -24,6 +24,7 @@ import type { Project } from "~/types";
 
 import { render } from "../../test/render";
 import { DEFAULT_FORK_SETTINGS, readForkSettings, updateForkSettings } from "./forkSettings";
+import { ForkSettingsSection } from "./ForkSettingsSection";
 import type { SidebarSpace } from "./spaces.logic";
 
 vi.mock("../state/entities", { spy: true });
@@ -517,21 +518,59 @@ describe("Spaces sidebar", () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
-  it("adds a Space from the strip and opens its editor", async () => {
+  it("hides the strip while there is one Space and adds more from ••• and Settings", async () => {
     using stack = new DisposableStack();
     await setup(stack, { spaces: [] });
     await using _screen = await renderSidebar();
-    // A Mac with no Spaces saved shows one Home Space with every project.
+    // A Mac with no Spaces saved shows one Home Space with every project, and no strip.
     await expect.element(page.getByText("Eagle main")).toBeInTheDocument();
     expect(shownSpace()).toContain("Home");
+    expect(document.querySelector('[data-testid="space-strip"]')).toBeNull();
 
-    await userEvent.click(page.getByTestId("space-strip-add"));
-    await expect.element(page.getByTestId("space-editor")).toBeVisible();
+    await userEvent.click(page.getByTestId("space-editor-trigger"));
+    const editor = page.getByTestId("space-editor");
+    await expect.element(editor).toBeVisible();
+    await userEvent.click(editor.getByRole("button", { name: "New Space" }));
+    // The editor stays open on the new Space, ready to name.
     await vi.waitFor(() => expect(shownSpace()).toContain("New Space"));
+    await expect.element(editor.getByRole("textbox", { name: "Space name" })).toHaveFocus();
+    await expect.element(page.getByTestId("space-strip")).toBeInTheDocument();
     const saved = readForkSettings();
     expect(saved.spaces.map((entry) => entry.name)).toEqual(["Home", "New Space"]);
     expect(saved.activeSpaceId).toBe(saved.spaces[1]!.id);
     // A new Space starts empty.
     expect(text()).not.toContain("Eagle main");
+
+    // The strip's + adds a third; deleting back to one hides the strip again.
+    await userEvent.keyboard("{Escape}");
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-testid="space-editor"]')).toBeNull(),
+    );
+    await userEvent.click(page.getByTestId("space-strip-add"));
+    await vi.waitFor(() => expect(readForkSettings().spaces).toHaveLength(3));
+    await expect.element(editor).toBeVisible();
+    await userEvent.click(editor.getByRole("button", { name: "Delete Space" }));
+    await vi.waitFor(() => expect(readForkSettings().spaces).toHaveLength(2));
+    await expect.element(page.getByTestId("space-strip")).toBeInTheDocument();
+    await userEvent.click(page.getByTestId("space-editor-trigger"));
+    await expect.element(editor).toBeVisible();
+    await userEvent.click(editor.getByRole("button", { name: "Delete Space" }));
+    await vi.waitFor(() => expect(readForkSettings().spaces).toHaveLength(1));
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-testid="space-strip"]')).toBeNull(),
+    );
+    expect(shownSpace()).toContain("New Space");
+  });
+
+  it("adds a Space from Settings, Labs, Customizations", async () => {
+    using stack = new DisposableStack();
+    await setup(stack, { spaces: [] });
+    await using screen = await render(<ForkSettingsSection />, { router: false });
+    await expect.element(screen.getByTestId("fork-space-count")).toHaveTextContent("1 space");
+    await userEvent.click(screen.getByTestId("fork-settings-add-space"));
+    await expect.element(screen.getByTestId("fork-space-count")).toHaveTextContent("2 spaces");
+    const saved = readForkSettings();
+    expect(saved.spaces.map((entry) => entry.name)).toEqual(["Home", "New Space"]);
+    expect(saved.activeSpaceId).toBe(saved.spaces[1]!.id);
   });
 });

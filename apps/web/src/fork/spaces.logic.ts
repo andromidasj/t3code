@@ -163,6 +163,14 @@ export function createSpace(
   };
 }
 
+/** A new Space in the first look the others do not use, shown right away. */
+export function addNewSpace(
+  state: SidebarSpacesState,
+  input: Pick<SidebarSpace, "id" | "name">,
+): SidebarSpacesState {
+  return createSpace(state, { ...input, ...nextSpaceLook(resolveSpaces(state).spaces) });
+}
+
 /** The first icon and tint no Space uses yet, so a new Space looks different from the rest. */
 export function nextSpaceLook(
   spaces: ReadonlyArray<Pick<SidebarSpace, "icon" | "tint">>,

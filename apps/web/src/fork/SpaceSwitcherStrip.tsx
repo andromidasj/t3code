@@ -15,12 +15,15 @@ import type { ForkSidebarSpaces } from "./useSidebarSpaces";
 const pillTransform = (index: number) =>
   `translateX(calc(${Math.max(0, index)} * var(--spacing) * 9))`;
 
-/** The Spaces as a row of icons above Settings, with a + to add one. */
+/**
+ * The Spaces as a row of icons above Settings, with a + to add one. A lone Space has nothing to
+ * switch to, so the strip stays away; ••• in the Space's header and Settings add the second.
+ */
 export function SpaceSwitcherStrip(props: { readonly spaces: ForkSidebarSpaces }) {
   const gt = useGT();
   const { spaces } = props;
   const view = spaces.view;
-  if (view === null) return null;
+  if (view === null || view.resolved.spaces.length <= 1) return null;
   const { resolved, shownSpace, stats } = view;
   const shownIndex = resolved.spaces.indexOf(shownSpace);
   const showShortcuts = isMacPlatform(navigator.platform);

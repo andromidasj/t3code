@@ -152,6 +152,8 @@ function SpaceEditor({
         <SpaceBadge icon={space.icon} tint={space.tint} />
         <input
           ref={nameRef}
+          // A Space added from the editor remounts it, and its name is the next thing to set.
+          autoFocus
           value={name}
           maxLength={24}
           spellCheck={false}
@@ -350,6 +352,10 @@ function SpaceEditor({
           {gt("Delete Space")}
         </Button>
       </div>
+      <Button size="xs" variant="ghost" className="self-start" onClick={spaces.addSpace}>
+        <PlusIcon />
+        {gt("New Space")}
+      </Button>
     </div>
   );
 }

@@ -59,7 +59,8 @@ keeps your sign-in, settings and threads.
      waits on you there; blue: unread), a two-finger sideways swipe, or Ctrl+1 to Ctrl+9.
      Switching never changes the open chat; opening a thread from elsewhere shows its Space.
      The ••• next to the Space's name edits its name, icon, tint and projects; + on the strip
-     adds a Space. While on, it replaces the project menu, saved views and the Bot Dock.
+     adds a Space. ⌘1–9 jump to the grid's tiles first (holding ⌘ numbers them), then on down
+     the list. While on, it replaces the project menu, saved views and the Bot Dock.
      Spaces are saved on this Mac only.
      "Show projects & bots in @ mentions" (on by default) lists projects (one per sidebar group,
      across environments, not archived) under "Projects & bots" at the top of the composer's `@`
@@ -127,3 +128,4 @@ reinstalls the current release.
 | Setting to turn off swipe back/forward             | none (fork-only)           | upstream makes the swipe optional      |
 | Bot / Background holds only bot lanes              | none (fork-only)           | the sidebar filter patch is dropped    |
 | Per-thread Bot / Background placement override     | none (fork-only)           | the sidebar filter patch is dropped    |
+| ⌘1–9 start with the Space's Pinned Grid tiles      | none (fork-only)           | the Spaces patch is dropped            |

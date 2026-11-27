@@ -1555,7 +1555,13 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   // Search hides them, so they drop out while it is open.
   const listedDraftIds = isSearchingThreads ? EMPTY_DRAFT_IDS : draftIds;
   const draftIdByRowKey = new Map<string, DraftId>(listedDraftIds.map((id) => [`draft:${id}`, id]));
-  const orderedRowKeys = [...draftIdByRowKey.keys(), ...orderedThreadKeys];
+  // Fork: the shown Space's grid tiles lead the jump order, as they lead the sidebar.
+  const forkGridTiles = forkSpaces.view?.tiles ?? [];
+  const orderedRowKeys = [
+    ...forkGridTiles.map((tile) => tile.key),
+    ...draftIdByRowKey.keys(),
+    ...orderedThreadKeys,
+  ];
   const routeDraftRowKey = `draft:${routeDraftIdForRows}`;
   const routeRowKey = draftIdByRowKey.has(routeDraftRowKey) ? routeDraftRowKey : routeRowThreadKey;
 
@@ -3097,7 +3103,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       const navigateToRowKey = (targetRowKey: string | null) => {
         if (!targetRowKey) return false;
         const targetDraftId = draftIdByRowKey.get(targetRowKey);
-        const targetThread = threadByKey.get(targetRowKey);
+        const targetThread =
+          threadByKey.get(targetRowKey) ??
+          forkGridTiles.find((tile) => tile.key === targetRowKey)?.thread;
         if (targetDraftId === undefined && !targetThread) return false;
         event.preventDefault();
         event.stopPropagation();
@@ -3125,6 +3133,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     return () => window.removeEventListener("keydown", onWindowKeyDown);
   }, [
     draftIdByRowKey,
+    forkGridTiles,
     keybindings,
     navigateToDraft,
     navigateToThread,
@@ -3460,6 +3469,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               providerEntriesByEnvironment={providerEntriesByEnvironment}
               environmentLabelById={environmentLabelById}
               showEnvironments={showProjectEnvironments}
+              jumpLabelByKey={showJumpHints ? jumpLabelByKey : null}
               onOpenThread={navigateToThread}
               onNewThread={startThreadInProjectFolder}
             />

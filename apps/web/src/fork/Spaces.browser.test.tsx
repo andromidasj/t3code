@@ -30,6 +30,16 @@ vi.mock("../state/entities", { spy: true });
 vi.mock("../hooks/useHandleNewThread", { spy: true });
 vi.mock("../hooks/useThreadRouteTarget", { spy: true });
 vi.mock("../localApi", { spy: true });
+vi.mock(import("../state/server"), async (original) => {
+  const { Atom } = await import("effect/reactivity");
+  const { compileResolvedKeybindingsConfig } = await import("@t3tools/shared/keybindings");
+  const keybindings = compileResolvedKeybindingsConfig([
+    { key: "mod+1", command: "thread.jump.1" },
+    { key: "mod+2", command: "thread.jump.2" },
+    { key: "mod+3", command: "thread.jump.3" },
+  ]);
+  return { ...(await original()), primaryServerKeybindingsAtom: Atom.make(keybindings) };
+});
 vi.mock("../components/sidebar/SidebarChrome", () => ({
   SidebarChromeHeader: () => null,
   SidebarChromeFooter: () => <div data-testid="chrome-footer" />,
@@ -455,6 +465,56 @@ describe("Spaces sidebar", () => {
     await expect
       .element(page.getByTestId("space-editor").getByRole("button", { name: "Delete Space" }))
       .toBeDisabled();
+  });
+
+  it("jumps with ⌘1–9 through the Pinned Grid tiles first, then the list below", async () => {
+    using stack = new DisposableStack();
+    await setup(stack, {
+      spaces: [{ ...HOME, gridThreadKeys: [threadKey(chiefBrief)] }, EYE, WORK],
+    });
+    const platform = vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+    stack.defer(() => platform.mockRestore());
+    await using screen = await renderSidebar();
+    const navigate = vi.spyOn(screen.router!, "navigate").mockResolvedValue(undefined);
+    await vi.waitFor(() => expect(tiles()).toEqual([threadKey(chiefBrief)]));
+    await expect.element(page.getByText("Penny close")).toBeInTheDocument();
+    const openedThread = () =>
+      (navigate.mock.lastCall?.[0] as { params?: { threadId?: string } } | undefined)?.params
+        ?.threadId;
+    const hint = (selector: string) =>
+      document.querySelector(`${selector} [data-jump-hint]`)?.textContent ?? null;
+
+    // The one tile is number 1; the first list row below it is number 2.
+    await userEvent.keyboard("{Meta>}1{/Meta}");
+    await vi.waitFor(() => expect(openedThread()).toBe("Chief brief"));
+    await userEvent.keyboard("{Meta>}2{/Meta}");
+    await vi.waitFor(() => expect(openedThread()).toBe("Penny close"));
+
+    // Holding ⌘ numbers the tile and the row the same way.
+    await userEvent.keyboard("{Meta>}");
+    await vi.waitFor(() =>
+      expect(hint(`[data-testid="space-grid-tile-${threadKey(chiefBrief)}"]`)).toBe("⌘1"),
+    );
+    expect(hint(`[data-sidebar-row="${threadKey(pennyClose)}"]`)).toBe("⌘2");
+    await userEvent.keyboard("{/Meta}");
+    await vi.waitFor(() => expect(document.querySelector("[data-jump-hint]")).toBeNull());
+
+    // With both pinned, the tiles take 1 and 2 in grid order.
+    updateForkSettings({
+      spaces: [
+        { ...HOME, gridThreadKeys: [threadKey(pennyClose), threadKey(chiefBrief)] },
+        EYE,
+        WORK,
+      ],
+    });
+    await vi.waitFor(() => expect(tiles()).toEqual([threadKey(pennyClose), threadKey(chiefBrief)]));
+    await userEvent.keyboard("{Meta>}1{/Meta}");
+    await vi.waitFor(() => expect(openedThread()).toBe("Penny close"));
+    await userEvent.keyboard("{Meta>}2{/Meta}");
+    await vi.waitFor(() => expect(openedThread()).toBe("Chief brief"));
+    navigate.mockClear();
+    await userEvent.keyboard("{Meta>}3{/Meta}");
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it("adds a Space from the strip and opens its editor", async () => {

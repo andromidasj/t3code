@@ -6,7 +6,7 @@ import { useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from
 
 import { ProviderInstanceIcon } from "~/components/chat/ProviderInstanceIcon";
 import { ProjectFavicon } from "~/components/ProjectFavicon";
-import type { SidebarProviderEntry } from "~/components/sidebar/SidebarThreadRow";
+import { JumpHintBadge, type SidebarProviderEntry } from "~/components/sidebar/SidebarThreadRow";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { contextMenuSourceOf, openContextMenuFromKeyboard } from "~/contextMenuSource";
 import { readLocalApi } from "~/localApi";
@@ -27,6 +27,8 @@ export interface SpacePinnedGridProps {
   readonly environmentLabelById: ReadonlyMap<EnvironmentId, string | null>;
   /** Projects span several environments, so the tooltip names the thread's. */
   readonly showEnvironments: boolean;
+  /** The ⌘1–9 labels by thread key while ⌘ is held; null otherwise. */
+  readonly jumpLabelByKey: ReadonlyMap<string, string> | null;
   readonly onOpenThread: (ref: ScopedThreadRef) => void;
   readonly onNewThread: (group: SpacesGroup) => void;
 }
@@ -100,6 +102,7 @@ export function SpacePinnedGrid(props: SpacePinnedGridProps) {
         <SpaceGridTileView
           key={tile.key}
           tile={tile}
+          jumpLabel={props.jumpLabelByKey?.get(tile.key) ?? null}
           renaming={renamingKey === tile.key}
           providerEntry={
             props.providerEntriesByEnvironment
@@ -150,6 +153,7 @@ const WORKING_SWEEP: CSSProperties = {
 
 function SpaceGridTileView(props: {
   readonly tile: GridTile;
+  readonly jumpLabel: string | null;
   readonly renaming: boolean;
   readonly providerEntry: SidebarProviderEntry | null;
   readonly environmentLabel: string | null;
@@ -297,6 +301,11 @@ function SpaceGridTileView(props: {
             }
           >
             {avatar}
+            {props.jumpLabel !== null ? (
+              <span className="pointer-events-none absolute top-1 right-0.5">
+                <JumpHintBadge label={props.jumpLabel} />
+              </span>
+            ) : null}
             <span
               className={cn(
                 "flex h-3.5 max-w-full items-center justify-center px-1.5 text-2xs leading-3.5",
